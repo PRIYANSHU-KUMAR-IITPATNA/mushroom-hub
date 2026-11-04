@@ -1,3 +1,5 @@
+
+
 # Mushroom Hub production implementation plan
 
 **Status: planning only.** This plan uses the audited [production database specification](./production-database-spec.md) as its baseline. The specification and this plan describe intended design; neither is a deployed schema or evidence that Supabase, authentication, policies, migrations, tests, backups, or production controls exist. The current React/TypeScript/Vite application remains a local demo using simulated sessions and browser storage.
