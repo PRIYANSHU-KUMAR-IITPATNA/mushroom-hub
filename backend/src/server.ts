@@ -50,7 +50,14 @@ async function startServer(): Promise<void> {
   )
 
   server.listen(environment.PORT, '0.0.0.0', () => {
-    logger.info({ port: environment.PORT, nodeEnv: environment.NODE_ENV }, 'Backend listening')
+    logger.info(
+      {
+        port: environment.PORT,
+        nodeEnv: environment.NODE_ENV,
+        smsProviderConfigured: Boolean(smsProvider),
+      },
+      'Backend listening',
+    )
   })
 
   let shuttingDown = false

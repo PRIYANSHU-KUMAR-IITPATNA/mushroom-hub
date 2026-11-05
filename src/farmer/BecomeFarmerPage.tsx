@@ -98,9 +98,11 @@ function errorKey(error: unknown): TranslationKey {
   switch (error.code) {
     case 'OTP_PROVIDER_UNAVAILABLE':
     case 'OTP_NOT_CONFIGURED':
-    case 'OTP_DELIVERY_FAILED':
-    case 'API_NOT_CONFIGURED':
       return 'onboardingOtpUnavailable'
+    case 'OTP_DELIVERY_FAILED':
+      return 'onboardingOtpSendFailed'
+    case 'API_NOT_CONFIGURED':
+      return 'onboardingApiUnavailable'
     case 'OTP_RESEND_COOLDOWN':
     case 'OTP_RATE_LIMITED':
       return 'onboardingOtpCooldown'

@@ -394,8 +394,17 @@ function apiErrorKey(error: unknown): TranslationKey {
   if (error instanceof OnboardingApiError && error.code === 'ADMIN_REQUIRED') {
     return 'adminFarmerNoAccess'
   }
-  if (error instanceof OnboardingApiError && error.code === 'OTP_PROVIDER_UNAVAILABLE') {
+  if (
+    error instanceof OnboardingApiError &&
+    (error.code === 'OTP_PROVIDER_UNAVAILABLE' || error.code === 'OTP_NOT_CONFIGURED')
+  ) {
     return 'onboardingOtpUnavailable'
+  }
+  if (error instanceof OnboardingApiError && error.code === 'OTP_DELIVERY_FAILED') {
+    return 'onboardingOtpSendFailed'
+  }
+  if (error instanceof OnboardingApiError && error.code === 'API_NOT_CONFIGURED') {
+    return 'onboardingApiUnavailable'
   }
   if (error instanceof OnboardingApiError && error.code === 'OTP_INVALID') {
     return 'onboardingOtpInvalid'

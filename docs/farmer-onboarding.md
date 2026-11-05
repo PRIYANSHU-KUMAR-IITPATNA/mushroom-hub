@@ -37,6 +37,12 @@
 7. Configure Cloud Run secrets, Vercel environment, and production edge/IP rate limits. Configure the forwarded-client-IP trust boundary before relying on IP-based API limits.
 8. Review the privacy notice and retention policy; notification to applicants remains a follow-up because no notification provider/configuration exists.
 
+## OTP unavailable-message diagnosis
+
+The previous generic frontend message grouped an unconfigured frontend API URL with a disabled backend SMS provider. It now distinguishes those cases and provider send failures in English and Hindi. In the inspected local backend environment, an API key was present but `BREVO_SMS_SENDER`, `BREVO_SMS_ENABLED`, and `OTP_HASH_SECRET` were absent. Since SMS defaults to disabled, the backend did not instantiate the Brevo provider and the OTP request returns `503 OTP_PROVIDER_UNAVAILABLE`. No backend was listening locally and no local application log files were present; startup logs now include only whether an SMS provider is configured.
+
+The checked-out `origin/main` backend also calls `createApp` without an SMS provider, while the Brevo wiring is only on `feature/brevo-transactional-sms`. Thus the current main-branch backend will always return `503 OTP_PROVIDER_UNAVAILABLE` for OTP requests. The Vercel production `VITE_API_BASE_URL` and Cloud Run environment were not inspectable from this workspace (no linked Vercel project or deployment CLI was available). No live SMS was sent.
+
 The supplied local Neon credentials were reported as rotated, but no database connectivity check, migration, or live transaction was performed. No Vercel or Cloud Run deployment was performed.
 
 The configured Brevo key was moved from the ignored repository-root `.env` into the ignored `backend/.env`; only the backend process loads it. The sender and `BREVO_SMS_ENABLED` remain unset/disabled, and no SMS was sent.
