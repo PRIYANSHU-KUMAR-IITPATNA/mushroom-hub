@@ -145,6 +145,8 @@ model User {
   id                  String                       @id @default(uuid()) @db.Uuid
   phoneE164           String?                      @unique @map("phone_e164") @db.VarChar(16)
   phoneVerifiedAt     DateTime?                    @map("phone_verified_at") @db.Timestamptz(6)
+  email               String?                      @unique @db.VarChar(254)
+  emailVerifiedAt     DateTime?                    @map("email_verified_at") @db.Timestamptz(6)
   status              AccountStatus                @default(ACTIVE)
   createdAt           DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -172,6 +174,7 @@ model User {
   idempotencyKeys     IdempotencyKey[]
   farmerApplication   FarmerApplication?
   authSessions        AuthSession[]
+  emailOtpChallenges  EmailOtpChallenge[]
   farmerReviewActions FarmerApplicationHistory[]   @relation("FarmerApplicationReviewer")
 
   @@map("users")
@@ -233,6 +236,7 @@ model FarmerProfile {
   state          String                     @db.VarChar(100)
   district       String                     @db.VarChar(100)
   locality       String                     @db.VarChar(160)
+  block          String?                    @db.VarChar(100)
   pinCode        String                     @map("pin_code") @db.VarChar(6)
   createdAt      DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -252,10 +256,12 @@ model FarmerApplication {
   id                 String                     @id @default(uuid()) @db.Uuid
   reference          String                     @unique @db.VarChar(24)
   userId             String                     @unique @map("user_id") @db.Uuid
+  contactPhoneE164   String?                    @map("contact_phone_e164") @db.VarChar(16)
   fullName           String                     @map("full_name") @db.VarChar(120)
   state              String                     @db.VarChar(100)
   district           String                     @db.VarChar(100)
   locality           String                     @db.VarChar(160)
+  block              String?                    @db.VarChar(100)
   pinCode            String                     @map("pin_code") @db.VarChar(6)
   address            String?                    @db.VarChar(300)
   preferredLanguage  String                     @default("en") @map("preferred_language") @db.VarChar(2)
@@ -310,6 +316,25 @@ model OtpChallenge {
   @@index([ipHash, createdAt])
   @@index([expiresAt, consumedAt])
   @@map("otp_challenges")
+}
+
+model EmailOtpChallenge {
+  id                String    @id @default(uuid()) @db.Uuid
+  email             String    @db.VarChar(254)
+  codeHash          String    @map("code_hash") @db.VarChar(128)
+  ipHash            String    @map("ip_hash") @db.VarChar(128)
+  attempts          Int       @default(0)
+  expiresAt         DateTime  @map("expires_at") @db.Timestamptz(6)
+  resendAvailableAt DateTime  @map("resend_available_at") @db.Timestamptz(6)
+  consumedAt        DateTime? @map("consumed_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  userId            String?   @map("user_id") @db.Uuid
+  user              User?     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([email, createdAt])
+  @@index([ipHash, createdAt])
+  @@index([expiresAt, consumedAt])
+  @@map("email_otp_challenges")
 }
 
 model AuthSession {

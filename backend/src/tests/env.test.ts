@@ -18,6 +18,8 @@ describe('environment configuration', () => {
     assert.deepEqual(environment.CORS_ORIGINS, ['http://localhost:5173'])
     assert.equal(environment.BREVO_SMS_ENABLED, false)
     assert.equal(environment.BREVO_SMS_TIMEOUT_MS, 10000)
+    assert.equal(environment.BREVO_EMAIL_ENABLED, false)
+    assert.equal(environment.BREVO_EMAIL_TIMEOUT_MS, 10000)
   })
 
   it('accepts comma-separated explicit CORS origins', () => {
@@ -158,5 +160,33 @@ describe('environment configuration', () => {
       }),
       EnvironmentValidationError,
     )
+  })
+
+  it('requires email sender settings and OTP secret independently of SMS configuration', () => {
+    assert.throws(
+      () => parseEnvironment({
+        ...validEnvironment,
+        BREVO_EMAIL_ENABLED: 'true',
+        BREVO_API_KEY: 'test-key',
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof EnvironmentValidationError)
+        assert.deepEqual(
+          error.issues.map((issue) => issue.path[0]).sort(),
+          ['BREVO_EMAIL_SENDER', 'BREVO_EMAIL_SENDER_NAME', 'OTP_HASH_SECRET'],
+        )
+        return true
+      },
+    )
+    const enabled = parseEnvironment({
+      ...validEnvironment,
+      BREVO_EMAIL_ENABLED: 'true',
+      BREVO_API_KEY: 'test-key',
+      BREVO_EMAIL_SENDER: 'farmers@example.test',
+      BREVO_EMAIL_SENDER_NAME: 'Mushroom Hub',
+      OTP_HASH_SECRET: 'a'.repeat(32),
+    })
+    assert.equal(enabled.BREVO_EMAIL_ENABLED, true)
+    assert.equal(enabled.BREVO_SMS_ENABLED, false)
   })
 })

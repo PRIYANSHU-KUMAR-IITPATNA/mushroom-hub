@@ -5,13 +5,18 @@ import { z } from 'zod'
 import { getPrismaClient } from '../../config/database.js'
 import { HttpError } from '../../middleware/errors.js'
 import { validateBody } from '../../middleware/request-validation.js'
-import { requireApplicantSession, requireCsrfToken } from './auth.js'
+import { normalizeIndianPhone, requireApplicantSession, requireCsrfToken } from './auth.js'
 
 const CONSENT_VERSION = 'farmer-application-v1'
 
 const applicantFieldsSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
+  contactPhone: z.string().trim().min(10).max(16).refine(
+    (value) => normalizeIndianPhone(value) !== undefined,
+    'Enter a valid Indian mobile number',
+  ),
   locality: z.string().trim().min(2).max(160),
+  block: z.string().trim().min(2).max(100),
   pinCode: z.string().regex(/^\d{6}$/),
   district: z.string().trim().min(2).max(100).default('Dhanbad'),
   state: z.string().trim().min(2).max(100).default('Jharkhand'),
@@ -130,7 +135,9 @@ function isUniqueViolation(error: unknown): boolean {
 
 function applicantData(input: {
   fullName: string
+  contactPhone: string
   locality: string
+  block: string
   pinCode: string
   district: string
   state: string
@@ -142,7 +149,9 @@ function applicantData(input: {
 }) {
   return {
     fullName: input.fullName,
+    contactPhoneE164: normalizeIndianPhone(input.contactPhone),
     locality: input.locality,
+    block: input.block,
     pinCode: input.pinCode,
     district: input.district,
     state: input.state,
@@ -169,6 +178,13 @@ export function createFarmerApplicationsRouter(): Router {
     validateBody(farmerApplicationSchema),
     async (request, response) => {
       const session = getSession(response)
+      const verifiedEmail = await getPrismaClient().user.findFirst({
+        where: { id: session.userId, email: { not: null }, emailVerifiedAt: { not: null } },
+        select: { id: true },
+      })
+      if (!verifiedEmail) {
+        throw new HttpError(403, 'EMAIL_VERIFICATION_REQUIRED', 'Verify your email before submitting an application')
+      }
       const key = getIdempotencyKey(request.get('Idempotency-Key'))
       const inputHash = requestHash(request.body)
       const prisma = getPrismaClient()
@@ -278,7 +294,9 @@ export function createFarmerApplicationsRouter(): Router {
         submittedAt: true,
         updatedAt: true,
         fullName: true,
+        contactPhoneE164: true,
         locality: true,
+        block: true,
         pinCode: true,
         district: true,
         state: true,
@@ -296,7 +314,9 @@ export function createFarmerApplicationsRouter(): Router {
         ...(application.status === FarmerApplicationStatus.CHANGES_REQUESTED
           ? {
               fullName: application.fullName,
+              contactPhone: application.contactPhoneE164,
               locality: application.locality,
+              block: application.block,
               pinCode: application.pinCode,
               district: application.district,
               state: application.state,
@@ -320,6 +340,13 @@ export function createFarmerApplicationsRouter(): Router {
     validateBody(farmerApplicationPatchSchema),
     async (request, response) => {
       const session = getSession(response)
+      const verifiedEmail = await getPrismaClient().user.findFirst({
+        where: { id: session.userId, email: { not: null }, emailVerifiedAt: { not: null } },
+        select: { id: true },
+      })
+      if (!verifiedEmail) {
+        throw new HttpError(403, 'EMAIL_VERIFICATION_REQUIRED', 'Verify your email before updating an application')
+      }
       const prisma = getPrismaClient()
       const updated = await prisma.$transaction(async (transaction) => {
         const current = await transaction.farmerApplication.findUnique({
@@ -399,13 +426,13 @@ export function createAdminFarmerApplicationsRouter(): Router {
         pinCode: true,
         status: true,
         submittedAt: true,
-        user: { select: { phoneE164: true } },
+        contactPhoneE164: true,
       },
     })
     response.status(200).json({
-      data: applications.map(({ user, ...application }) => ({
+      data: applications.map((application) => ({
         ...application,
-        phone: maskPhone(user.phoneE164),
+        phone: maskPhone(application.contactPhoneE164),
       })),
       error: null,
       meta: { requestId: response.locals.requestId },
@@ -422,7 +449,9 @@ export function createAdminFarmerApplicationsRouter(): Router {
         state: true,
         district: true,
         locality: true,
+        block: true,
         pinCode: true,
+        contactPhoneE164: true,
         address: true,
         preferredLanguage: true,
         experience: true,
@@ -434,7 +463,7 @@ export function createAdminFarmerApplicationsRouter(): Router {
         applicantMessage: true,
         submittedAt: true,
         updatedAt: true,
-        user: { select: { phoneE164: true } },
+        user: { select: { phoneE164: true, email: true } },
         history: {
           orderBy: { createdAt: 'desc' },
           select: {
@@ -448,9 +477,13 @@ export function createAdminFarmerApplicationsRouter(): Router {
       },
     })
     if (!application) throw new HttpError(404, 'APPLICATION_NOT_FOUND', 'The application was not found')
-    const { user, ...details } = application
+    const { user, contactPhoneE164, ...details } = application
     response.status(200).json({
-      data: { ...details, phone: user.phoneE164 },
+      data: {
+        ...details,
+        email: user.email,
+        phone: contactPhoneE164 ?? user.phoneE164,
+      },
       error: null,
       meta: { requestId: response.locals.requestId },
     })
@@ -497,6 +530,7 @@ export function createAdminFarmerApplicationsRouter(): Router {
                 state: application.state,
                 district: application.district,
                 locality: application.locality,
+                block: application.block,
                 pinCode: application.pinCode,
               },
             })

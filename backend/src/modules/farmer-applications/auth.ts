@@ -6,7 +6,9 @@ import { getPrismaClient } from '../../config/database.js'
 import { HttpError } from '../../middleware/errors.js'
 import { validateBody } from '../../middleware/request-validation.js'
 import { logger } from '../../utils/logger.js'
+import { BrevoEmailError } from './brevo-email-provider.js'
 import { BrevoSmsError } from './brevo-sms-provider.js'
+import type { EmailProvider } from './email-provider.js'
 import type { SmsProvider } from './sms-provider.js'
 
 const SESSION_COOKIE = 'mh_session'
@@ -17,6 +19,7 @@ const OTP_MAX_ATTEMPTS = 5
 const OTP_WINDOW_MS = 1000 * 60 * 15
 const OTP_MAX_REQUESTS_PER_PHONE = 5
 const OTP_MAX_REQUESTS_PER_IP = 20
+const OTP_MAX_REQUESTS_PER_EMAIL = 5
 
 const requestOtpSchema = z.object({
   phone: z.string().trim().min(10).max(16),
@@ -24,6 +27,16 @@ const requestOtpSchema = z.object({
 
 const verifyOtpSchema = z.object({
   phone: z.string().trim().min(10).max(16),
+  challengeId: z.string().uuid(),
+  code: z.string().regex(/^\d{6}$/),
+})
+
+const requestEmailOtpSchema = z.object({
+  email: z.string().trim().email().max(254),
+})
+
+const verifyEmailOtpSchema = z.object({
+  email: z.string().trim().email().max(254),
   challengeId: z.string().uuid(),
   code: z.string().regex(/^\d{6}$/),
 })
@@ -42,13 +55,13 @@ function hash(value: string): string {
 function getOtpSecret(): string {
   const secret = process.env.OTP_HASH_SECRET
   if (!secret || secret.length < 32) {
-    throw new HttpError(503, 'OTP_NOT_CONFIGURED', 'Phone verification is not configured')
+    throw new HttpError(503, 'OTP_NOT_CONFIGURED', 'Verification is not configured')
   }
   return secret
 }
 
-function hashOtp(phone: string, code: string, secret: string): string {
-  return createHmac('sha256', secret).update(`${phone}:${code}`).digest('hex')
+function hashOtp(subject: string, code: string, secret: string): string {
+  return createHmac('sha256', secret).update(`${subject}:${code}`).digest('hex')
 }
 
 function hashIp(ip: string, secret: string): string {
@@ -72,6 +85,10 @@ export function normalizeIndianPhone(value: string): string | undefined {
   if (/^[6-9]\d{9}$/.test(digits)) return `+91${digits}`
   if (/^\+91[6-9]\d{9}$/.test(digits)) return digits
   return undefined
+}
+
+export function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase()
 }
 
 function readSessionToken(cookieHeader: string | undefined): string | undefined {
@@ -135,8 +152,208 @@ export const requireCsrfToken: RequestHandler = (request, response, next) => {
   next()
 }
 
-export function createAuthRouter(smsProvider?: SmsProvider): Router {
+export function createAuthRouter(smsProvider?: SmsProvider, emailProvider?: EmailProvider): Router {
   const router = Router()
+
+  router.post(
+    '/email-otp/request',
+    validateBody(requestEmailOtpSchema),
+    async (request, response) => {
+      const email = normalizeEmail(request.body.email)
+      if (!emailProvider) {
+        throw new HttpError(
+          503,
+          'EMAIL_PROVIDER_UNAVAILABLE',
+          'Email verification is not configured',
+        )
+      }
+
+      const secret = getOtpSecret()
+      const prisma = getPrismaClient()
+      const now = new Date()
+      const windowStart = new Date(now.getTime() - OTP_WINDOW_MS)
+      const ipHash = hashIp(request.ip ?? request.socket.remoteAddress ?? 'unknown', secret)
+      const code = String(randomInt(100000, 1000000))
+      let challenge: { id: string }
+      try {
+        challenge = await prisma.$transaction(async (transaction) => {
+          const [emailRequests, ipRequests, latestChallenge] = await Promise.all([
+            transaction.emailOtpChallenge.count({
+              where: { email, createdAt: { gte: windowStart } },
+            }),
+            transaction.emailOtpChallenge.count({
+              where: { ipHash, createdAt: { gte: windowStart } },
+            }),
+            transaction.emailOtpChallenge.findFirst({
+              where: { email },
+              orderBy: { createdAt: 'desc' },
+              select: { resendAvailableAt: true },
+            }),
+          ])
+
+          if (emailRequests >= OTP_MAX_REQUESTS_PER_EMAIL || ipRequests >= OTP_MAX_REQUESTS_PER_IP) {
+            throw new HttpError(429, 'OTP_RATE_LIMITED', 'Please wait before requesting another code')
+          }
+          if (latestChallenge && latestChallenge.resendAvailableAt > now) {
+            throw new HttpError(429, 'OTP_RESEND_COOLDOWN', 'Please wait before requesting another code')
+          }
+
+          await transaction.emailOtpChallenge.updateMany({
+            where: { email, consumedAt: null },
+            data: { consumedAt: now },
+          })
+          return transaction.emailOtpChallenge.create({
+            data: {
+              email,
+              codeHash: hashOtp(email, code, secret),
+              ipHash,
+              expiresAt: new Date(now.getTime() + OTP_TTL_MS),
+              resendAvailableAt: new Date(now.getTime() + OTP_RESEND_MS),
+            },
+            select: { id: true },
+          })
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+          throw new HttpError(429, 'OTP_RATE_LIMITED', 'Please wait before requesting another code')
+        }
+        throw error
+      }
+
+      try {
+        await emailProvider.sendVerificationCode(email, code)
+      } catch (error) {
+        logger.error(
+          {
+            requestId: response.locals.requestId,
+            ...(error instanceof BrevoEmailError
+              ? { providerFailure: error.failure, providerStatusCode: error.statusCode }
+              : { errorName: error instanceof Error ? error.name : 'UnknownError' }),
+          },
+          'Email OTP delivery failed',
+        )
+        await prisma.emailOtpChallenge.update({
+          where: { id: challenge.id },
+          data: { consumedAt: new Date() },
+        })
+        throw new HttpError(
+          503,
+          'EMAIL_DELIVERY_FAILED',
+          'We could not send a verification email right now',
+        )
+      }
+
+      response.status(200).json({
+        data: {
+          challengeId: challenge.id,
+          expiresInSeconds: OTP_TTL_MS / 1000,
+          resendInSeconds: OTP_RESEND_MS / 1000,
+          message: 'If this address can receive email, a verification code has been sent',
+        },
+        error: null,
+        meta: { requestId: response.locals.requestId },
+      })
+    },
+  )
+
+  router.post(
+    '/email-otp/verify',
+    validateBody(verifyEmailOtpSchema),
+    async (request, response) => {
+      const email = normalizeEmail(request.body.email)
+      const secret = getOtpSecret()
+      const prisma = getPrismaClient()
+      const now = new Date()
+      const challenge = await prisma.emailOtpChallenge.findFirst({
+        where: {
+          id: request.body.challengeId,
+          email,
+          consumedAt: null,
+          expiresAt: { gt: now },
+        },
+      })
+      if (!challenge) {
+        throw new HttpError(400, 'OTP_INVALID_OR_EXPIRED', 'The code is invalid or has expired')
+      }
+      if (challenge.attempts >= OTP_MAX_ATTEMPTS) {
+        throw new HttpError(429, 'OTP_ATTEMPTS_EXCEEDED', 'Request a new code to continue')
+      }
+
+      const suppliedHash = hashOtp(email, request.body.code, secret)
+      const isValid = hashesMatch(challenge.codeHash, suppliedHash)
+      const sessionToken = randomBytes(32).toString('base64url')
+      const csrfToken = csrfTokenForSession(sessionToken, secret)
+      const previousSessionToken = readSessionToken(request.headers.cookie)
+      const result = await prisma.$transaction(async (transaction) => {
+        const claimed = await transaction.emailOtpChallenge.updateMany({
+          where: {
+            id: challenge.id,
+            consumedAt: null,
+            expiresAt: { gt: now },
+            attempts: { lt: OTP_MAX_ATTEMPTS },
+          },
+          data: {
+            attempts: { increment: 1 },
+            ...(isValid ? { consumedAt: now } : {}),
+          },
+        })
+        if (claimed.count !== 1) return { state: 'expired' as const }
+        if (!isValid) {
+          return {
+            state: challenge.attempts + 1 >= OTP_MAX_ATTEMPTS ? 'limit' as const : 'invalid' as const,
+          }
+        }
+
+        const user = await transaction.user.upsert({
+          where: { email },
+          create: { email, emailVerifiedAt: now },
+          update: { emailVerifiedAt: now },
+          select: { id: true, status: true },
+        })
+        if (user.status !== 'ACTIVE') return { state: 'inactive' as const }
+
+        if (previousSessionToken) {
+          await transaction.authSession.updateMany({
+            where: { tokenHash: hash(previousSessionToken), revokedAt: null },
+            data: { revokedAt: now },
+          })
+        }
+        await transaction.authSession.create({
+          data: {
+            userId: user.id,
+            tokenHash: hash(sessionToken),
+            csrfTokenHash: hash(csrfToken),
+            expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
+          },
+        })
+        await transaction.emailOtpChallenge.update({
+          where: { id: challenge.id },
+          data: { userId: user.id },
+        })
+        return { state: 'verified' as const }
+      })
+
+      if (result.state === 'invalid') {
+        throw new HttpError(400, 'OTP_INVALID', 'The code is incorrect')
+      }
+      if (result.state === 'limit') {
+        throw new HttpError(429, 'OTP_ATTEMPTS_EXCEEDED', 'Request a new code to continue')
+      }
+      if (result.state === 'inactive') {
+        throw new HttpError(403, 'ACCOUNT_UNAVAILABLE', 'This account cannot sign in')
+      }
+      if (result.state !== 'verified') {
+        throw new HttpError(400, 'OTP_INVALID_OR_EXPIRED', 'The code is invalid or has expired')
+      }
+
+      setSessionCookie(response, sessionToken)
+      response.status(200).json({
+        data: { csrfToken },
+        error: null,
+        meta: { requestId: response.locals.requestId },
+      })
+    },
+  )
 
   router.post(
     '/otp/request',
@@ -347,12 +564,16 @@ export function createAuthRouter(smsProvider?: SmsProvider): Router {
   router.get('/session', requireApplicantSession, async (_request, response) => {
     const session = response.locals.session as SessionContext
     const csrfToken = csrfTokenForSession(session.sessionToken, getOtpSecret())
+    const user = await getPrismaClient().user.findUnique({
+      where: { id: session.userId },
+      select: { email: true, emailVerifiedAt: true },
+    })
     await getPrismaClient().authSession.update({
       where: { id: session.id },
       data: { csrfTokenHash: hash(csrfToken), lastSeenAt: new Date() },
     })
     response.status(200).json({
-      data: { csrfToken },
+      data: { csrfToken, email: user?.emailVerifiedAt ? user.email : null },
       error: null,
       meta: { requestId: response.locals.requestId },
     })

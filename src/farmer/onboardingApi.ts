@@ -17,7 +17,9 @@ export type FarmerApplication = {
   submittedAt: string
   updatedAt: string
   fullName?: string
+  contactPhone?: string
   locality?: string
+  block?: string
   pinCode?: string
   district?: string
   state?: string
@@ -30,10 +32,12 @@ export type FarmerApplication = {
 
 export type AdminFarmerApplication = FarmerApplication & {
   fullName: string
+  email: string | null
   phone: string
   state: string
   district: string
   locality: string
+  block: string
   pinCode: string
   address: string | null
   preferredLanguage: 'en' | 'hi'
@@ -136,8 +140,22 @@ export const onboardingApi = {
       body: { phone, challengeId, code },
     })
   },
+  requestEmailOtp(email: string) {
+    return request<{
+      challengeId: string
+      expiresInSeconds: number
+      resendInSeconds: number
+      message: string
+    }>('/auth/email-otp/request', { method: 'POST', body: { email } })
+  },
+  verifyEmailOtp(email: string, challengeId: string, code: string) {
+    return request<{ csrfToken: string }>('/auth/email-otp/verify', {
+      method: 'POST',
+      body: { email, challengeId, code },
+    })
+  },
   session() {
-    return request<{ csrfToken: string }>('/auth/session')
+    return request<{ csrfToken: string; email: string | null }>('/auth/session')
   },
   application() {
     return request<FarmerApplication>('/farmer-applications/me')

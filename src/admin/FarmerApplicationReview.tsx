@@ -270,8 +270,10 @@ function FarmerApplicationReview({ language, onLanguageChange }: Props) {
               <dl className="admin-review-details">
                 <div><dt>{translate(language, 'adminFarmerReference')}</dt><dd>{selected.reference}</dd></div>
                 <div><dt>{translate(language, 'adminFarmerName')}</dt><dd>{selected.fullName}</dd></div>
+                <div><dt>{translate(language, 'adminFarmerEmail')}</dt><dd>{selected.email}</dd></div>
                 <div><dt>{translate(language, 'adminFarmerPhoneLabel')}</dt><dd>{selected.phone}</dd></div>
                 <div><dt>{translate(language, 'adminFarmerLocality')}</dt><dd>{selected.locality}</dd></div>
+                <div><dt>{translate(language, 'onboardingBlock')}</dt><dd>{selected.block}</dd></div>
                 <div><dt>{translate(language, 'adminFarmerDistrict')}</dt><dd>{selected.district}, {selected.state}</dd></div>
                 <div><dt>{translate(language, 'adminFarmerPin')}</dt><dd>{selected.pinCode}</dd></div>
                 {selected.address ? <div><dt>{translate(language, 'onboardingAddress')}</dt><dd>{selected.address}</dd></div> : null}

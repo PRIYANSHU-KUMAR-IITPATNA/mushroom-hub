@@ -13,7 +13,9 @@ import {
 
 type FarmerForm = {
   fullName: string
+  contactPhone: string
   locality: string
+  block: string
   pinCode: string
   district: string
   state: string
@@ -33,11 +35,13 @@ type PageProps = {
   privacyOnly?: boolean
 }
 
-type JourneyStage = 'phone' | 'otp' | 'details' | 'status'
+type JourneyStage = 'email' | 'otp' | 'details' | 'status'
 
 const initialForm = (language: Language): FarmerForm => ({
   fullName: '',
+  contactPhone: '',
   locality: '',
+  block: '',
   pinCode: '',
   district: 'Dhanbad',
   state: 'Jharkhand',
@@ -78,7 +82,9 @@ function applicationForm(application?: FarmerApplication): Partial<FarmerForm> {
   if (!application) return {}
   return {
     fullName: application.fullName ?? '',
+    contactPhone: application.contactPhone ?? '',
     locality: application.locality ?? '',
+    block: application.block ?? '',
     pinCode: application.pinCode ?? '',
     district: application.district ?? 'Dhanbad',
     state: application.state ?? 'Jharkhand',
@@ -96,11 +102,11 @@ function applicationForm(application?: FarmerApplication): Partial<FarmerForm> {
 function errorKey(error: unknown): TranslationKey {
   if (!(error instanceof OnboardingApiError)) return 'onboardingNetworkError'
   switch (error.code) {
-    case 'OTP_PROVIDER_UNAVAILABLE':
+    case 'EMAIL_PROVIDER_UNAVAILABLE':
     case 'OTP_NOT_CONFIGURED':
-      return 'onboardingOtpUnavailable'
-    case 'OTP_DELIVERY_FAILED':
-      return 'onboardingOtpSendFailed'
+      return 'onboardingEmailUnavailable'
+    case 'EMAIL_DELIVERY_FAILED':
+      return 'onboardingEmailSendFailed'
     case 'API_NOT_CONFIGURED':
       return 'onboardingApiUnavailable'
     case 'OTP_RESEND_COOLDOWN':
@@ -112,6 +118,8 @@ function errorKey(error: unknown): TranslationKey {
       return 'onboardingOtpInvalid'
     case 'OTP_INVALID_OR_EXPIRED':
       return 'onboardingOtpExpired'
+    case 'EMAIL_VERIFICATION_REQUIRED':
+      return 'onboardingEmailRequired'
     case 'SESSION_REQUIRED':
     case 'SESSION_EXPIRED':
       return 'onboardingSessionExpired'
@@ -145,8 +153,8 @@ function BecomeFarmerPage({
   statusOnly = false,
   privacyOnly = false,
 }: PageProps) {
-  const [stage, setStage] = useState<JourneyStage>('phone')
-  const [phone, setPhone] = useState('')
+  const [stage, setStage] = useState<JourneyStage>('email')
+  const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')
   const [challengeId, setChallengeId] = useState('')
   const [csrfToken, setCsrfToken] = useState('')
@@ -168,6 +176,11 @@ function BecomeFarmerPage({
       .then(async (session) => {
         if (!active) return
         setCsrfToken(session.csrfToken)
+        if (!session.email) {
+          setStage('email')
+          return
+        }
+        setEmail(session.email)
         const currentApplication = await onboardingApi.application()
         if (!active) return
         setApplication(currentApplication)
@@ -187,7 +200,7 @@ function BecomeFarmerPage({
           reason instanceof OnboardingApiError &&
           (reason.code === 'SESSION_REQUIRED' || reason.code === 'SESSION_EXPIRED')
         ) {
-          setStage('phone')
+          setStage('email')
           return
         }
         setError(errorKey(reason))
@@ -232,21 +245,24 @@ function BecomeFarmerPage({
       return
     }
     setError(undefined)
+    setAnnouncement(undefined)
     setIsSending(true)
     try {
-      const result = await onboardingApi.requestOtp(phone)
+      const result = await onboardingApi.requestEmailOtp(email)
       setChallengeId(result.challengeId)
       setCooldown(result.resendInSeconds)
       setStage('otp')
-      setAnnouncement('onboardingOtpSent')
     } catch (reason) {
+      if (reason instanceof OnboardingApiError && reason.code === 'EMAIL_DELIVERY_FAILED') {
+        setCooldown(60)
+      }
       setError(errorKey(reason))
     } finally {
       setIsSending(false)
     }
   }
 
-  async function verifyOtp(event: FormEvent<HTMLFormElement>) {
+  async function verifyEmailOtp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!event.currentTarget.reportValidity()) {
       setError('onboardingFormError')
@@ -255,7 +271,7 @@ function BecomeFarmerPage({
     setError(undefined)
     setIsVerifying(true)
     try {
-      const session = await onboardingApi.verifyOtp(phone, challengeId, otp)
+      const session = await onboardingApi.verifyEmailOtp(email, challengeId, otp)
       setCsrfToken(session.csrfToken)
       setStage('details')
       setAnnouncement(undefined)
@@ -322,7 +338,7 @@ function BecomeFarmerPage({
           (reason.code === 'SESSION_REQUIRED' || reason.code === 'SESSION_EXPIRED')
         ) {
           setCsrfToken('')
-          setStage('phone')
+          setStage('email')
         }
       }
     } finally {
@@ -335,7 +351,7 @@ function BecomeFarmerPage({
       await onboardingApi.logout(csrfToken)
       setCsrfToken('')
       setApplication(undefined)
-      setStage('phone')
+      setStage('email')
       setAnnouncement(undefined)
     } catch (reason) {
       setError(errorKey(reason))
@@ -453,7 +469,7 @@ function BecomeFarmerPage({
 
                 <ol className="onboarding-progress" aria-label={translate(language, 'onboardingFormTitle')}>
                   <li aria-current={step === 1 ? 'step' : undefined}>
-                    {translate(language, 'onboardingStepPhone')}
+                    {translate(language, 'onboardingStepEmail')}
                   </li>
                   <li aria-current={step === 2 ? 'step' : undefined}>
                     {translate(language, 'onboardingStepDetails')}
@@ -470,40 +486,37 @@ function BecomeFarmerPage({
                   </p>
                 ) : null}
 
-                {stage === 'phone' && !isLoading ? (
+                {stage === 'email' && !isLoading ? (
                   <form className="onboarding-form" noValidate onSubmit={sendOtp}>
-                    <label className="onboarding-field" htmlFor="farmer-phone">
-                      <span>{translate(language, 'onboardingPhoneLabel')} *</span>
-                      <span className="onboarding-phone-input">
-                        <span aria-hidden="true">+91</span>
-                        <input
-                          autoComplete="tel-national"
-                          id="farmer-phone"
-                          inputMode="numeric"
-                          maxLength={10}
-                          minLength={10}
-                          onChange={(event) => setPhone(event.target.value.replace(/\D/g, ''))}
-                          pattern="[6-9][0-9]{9}"
-                          required
-                          value={phone}
-                        />
-                      </span>
+                    <label className="onboarding-field" htmlFor="farmer-email">
+                      <span>{translate(language, 'onboardingEmailLabel')} *</span>
+                      <input
+                        autoComplete="email"
+                        id="farmer-email"
+                        maxLength={254}
+                        onChange={(event) => setEmail(event.target.value)}
+                        required
+                        type="email"
+                        value={email}
+                      />
                     </label>
-                    <Button disabled={isSending} type="submit">
+                    <Button disabled={isSending || cooldown > 0} type="submit">
                       {isSending
-                        ? translate(language, 'onboardingSubmitting')
-                        : translate(language, 'onboardingRequestCode')}
+                        ? translate(language, 'onboardingEmailSending')
+                        : cooldown > 0
+                          ? `${translate(language, 'onboardingResendCode')} (${cooldown}s)`
+                          : translate(language, 'onboardingSendEmailCode')}
                     </Button>
                   </form>
                 ) : null}
 
                 {stage === 'otp' && !isLoading ? (
-                  <form className="onboarding-form" noValidate onSubmit={verifyOtp}>
+                  <form className="onboarding-form" noValidate onSubmit={verifyEmailOtp}>
                     <p className="onboarding-live" role="status" aria-live="polite">
-                      {translate(language, 'onboardingOtpSent')}
+                      {translate(language, 'onboardingEmailSent')}
                     </p>
                     <label className="onboarding-field" htmlFor="farmer-otp">
-                      <span>{translate(language, 'onboardingOtpLabel')} *</span>
+                      <span>{translate(language, 'onboardingEmailOtpLabel')} *</span>
                       <input
                         autoComplete="one-time-code"
                         id="farmer-otp"
@@ -520,8 +533,8 @@ function BecomeFarmerPage({
                     <div className="onboarding-form__actions">
                       <Button disabled={isVerifying} type="submit">
                         {isVerifying
-                          ? translate(language, 'onboardingSubmitting')
-                          : translate(language, 'onboardingVerifyCode')}
+                          ? translate(language, 'onboardingVerifyingEmail')
+                          : translate(language, 'onboardingVerifyEmail')}
                       </Button>
                       <Button
                         disabled={cooldown > 0 || isSending}
@@ -539,6 +552,9 @@ function BecomeFarmerPage({
 
                 {stage === 'details' && !isLoading ? (
                   <form className="onboarding-form" noValidate onSubmit={submitApplication}>
+                    <p className="onboarding-success" role="status">
+                      {translate(language, 'onboardingEmailVerified')} · {email}
+                    </p>
                     <label className="onboarding-field" htmlFor="farmer-name">
                       <span>{translate(language, 'onboardingFullName')} <span aria-label={translate(language, 'onboardingRequired')}>*</span></span>
                       <input
@@ -549,6 +565,35 @@ function BecomeFarmerPage({
                         onChange={(event) => updateForm('fullName', event.target.value)}
                         required
                         value={form.fullName}
+                      />
+                    </label>
+                    <label className="onboarding-field" htmlFor="farmer-contact-phone">
+                      <span>{translate(language, 'onboardingContactPhone')} *</span>
+                      <span className="onboarding-phone-input">
+                        <span aria-hidden="true">+91</span>
+                        <input
+                          autoComplete="tel-national"
+                          id="farmer-contact-phone"
+                          inputMode="numeric"
+                          maxLength={10}
+                          minLength={10}
+                          onChange={(event) => updateForm('contactPhone', event.target.value.replace(/\D/g, ''))}
+                          pattern="[6-9][0-9]{9}"
+                          required
+                          value={form.contactPhone.replace(/^\+91/, '')}
+                        />
+                      </span>
+                    </label>
+                    <label className="onboarding-field" htmlFor="farmer-block">
+                      <span>{translate(language, 'onboardingBlock')} *</span>
+                      <input
+                        autoComplete="address-level3"
+                        id="farmer-block"
+                        maxLength={100}
+                        minLength={2}
+                        onChange={(event) => updateForm('block', event.target.value)}
+                        required
+                        value={form.block}
                       />
                     </label>
                     <label className="onboarding-field" htmlFor="farmer-locality">

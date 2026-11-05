@@ -76,6 +76,21 @@ describe('health routes', () => {
     assert.equal(response.body.error.code, 'OTP_PROVIDER_UNAVAILABLE')
   })
 
+  it('rejects invalid email addresses before the email provider is checked', async () => {
+    const response = await request(app)
+      .post('/api/v1/auth/email-otp/request')
+      .send({ email: 'not-an-email' })
+    assert.equal(response.status, 400)
+  })
+
+  it('reports the missing email provider without simulating delivery', async () => {
+    const response = await request(app)
+      .post('/api/v1/auth/email-otp/request')
+      .send({ email: 'farmer@example.test' })
+    assert.equal(response.status, 503)
+    assert.equal(response.body.error.code, 'EMAIL_PROVIDER_UNAVAILABLE')
+  })
+
   it('requires an authenticated applicant session for private application status', async () => {
     const response = await request(app).get('/api/v1/farmer-applications/me')
     assert.equal(response.status, 401)

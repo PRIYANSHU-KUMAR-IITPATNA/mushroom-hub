@@ -8,7 +8,9 @@ import {
 
 const validApplication = {
   fullName: 'Asha Devi',
+  contactPhone: '9876543210',
   locality: 'Barwadda',
+  block: 'Baliapur',
   pinCode: '826004',
   district: 'Dhanbad',
   state: 'Jharkhand',
@@ -21,6 +23,16 @@ describe('farmer application validation', () => {
     const result = farmerApplicationSchema.safeParse(validApplication)
     assert.equal(result.success, true)
     if (result.success) assert.equal(result.data.promotionalConsent, false)
+  })
+
+  it('requires a valid Indian contact number and block', () => {
+    assert.equal(
+      farmerApplicationSchema.safeParse({ ...validApplication, contactPhone: '1234567890' }).success,
+      false,
+    )
+    const withoutBlock = { ...validApplication } as Record<string, unknown>
+    delete withoutBlock.block
+    assert.equal(farmerApplicationSchema.safeParse(withoutBlock).success, false)
   })
 
   it('rejects a malformed PIN code and missing required consent', () => {

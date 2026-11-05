@@ -5,6 +5,7 @@ import { connectDatabase, disconnectDatabase } from './config/database.js'
 import { createApp } from './app.js'
 import { logger } from './utils/logger.js'
 import { BrevoSmsProvider } from './modules/farmer-applications/brevo-sms-provider.js'
+import { BrevoEmailProvider } from './modules/farmer-applications/brevo-email-provider.js'
 
 async function startServer(): Promise<void> {
   let environment
@@ -28,6 +29,7 @@ async function startServer(): Promise<void> {
   }
 
   let smsProvider: BrevoSmsProvider | undefined
+  let emailProvider: BrevoEmailProvider | undefined
   if (environment.BREVO_SMS_ENABLED) {
     const apiKey = environment.BREVO_API_KEY
     const sender = environment.BREVO_SMS_SENDER
@@ -40,12 +42,27 @@ async function startServer(): Promise<void> {
       timeoutMs: environment.BREVO_SMS_TIMEOUT_MS,
     })
   }
+  if (environment.BREVO_EMAIL_ENABLED) {
+    const apiKey = environment.BREVO_API_KEY
+    const senderEmail = environment.BREVO_EMAIL_SENDER
+    const senderName = environment.BREVO_EMAIL_SENDER_NAME
+    if (!apiKey || !senderEmail || !senderName) {
+      throw new Error('Brevo email configuration is incomplete')
+    }
+    emailProvider = new BrevoEmailProvider({
+      apiKey,
+      senderEmail,
+      senderName,
+      timeoutMs: environment.BREVO_EMAIL_TIMEOUT_MS,
+    })
+  }
 
   await connectDatabase()
   const server = createServer(
     createApp({
       corsOrigins: environment.CORS_ORIGINS,
       smsProvider,
+      emailProvider,
     }),
   )
 
@@ -55,6 +72,7 @@ async function startServer(): Promise<void> {
         port: environment.PORT,
         nodeEnv: environment.NODE_ENV,
         smsProviderConfigured: Boolean(smsProvider),
+        emailProviderConfigured: Boolean(emailProvider),
       },
       'Backend listening',
     )
