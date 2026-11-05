@@ -1,6 +1,8 @@
 # Mushroom Hub production data architecture and migration path
 
-**Status:** planning proposal only. No backend is connected today, and this document does not change portal behavior or migrate/delete demo data.
+> **Historical planning snapshot:** This document contains the earlier Supabase/Firebase/custom-backend comparison. On 2026-11-04 the approved implementation stack became Express + TypeScript + Prisma + Neon PostgreSQL, with REST at `/api/v1` and Google Cloud Run as the API target; the existing frontend stays on Vercel. Supabase-specific recommendations below are not current implementation guidance. See [backend architecture](./backend-architecture.md), [database schema overview](./database-schema-overview.md), and [backend local setup](./backend-local-setup.md) for the approved direction.
+
+**Status:** historical planning proposal. No production backend connection or migration is represented by this document.
 
 ## 1. What the project actually implements
 

@@ -2,7 +2,9 @@
 
 # Mushroom Hub production implementation plan
 
-**Status: planning only.** This plan uses the audited [production database specification](./production-database-spec.md) as its baseline. The specification and this plan describe intended design; neither is a deployed schema or evidence that Supabase, authentication, policies, migrations, tests, backups, or production controls exist. The current React/TypeScript/Vite application remains a local demo using simulated sessions and browser storage.
+> **Superseded stack plan:** This is the earlier Supabase implementation plan, retained as historical decision context. On 2026-11-04 the approved stack became Express + TypeScript + Zod + Prisma + Neon PostgreSQL, REST API `/api/v1`, with Google Cloud Run as the backend target and the existing Vercel frontend retained. Follow [backend architecture](./backend-architecture.md), [database schema overview](./database-schema-overview.md), and [backend local setup](./backend-local-setup.md) for current foundation guidance. No Supabase project, Neon connection, migration, or cloud deployment is implied.
+
+**Status: superseded planning snapshot.** The current React/TypeScript/Vite application remains a local demo using simulated sessions and browser storage.
 
 ## Executive summary
 

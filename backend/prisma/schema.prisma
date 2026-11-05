@@ -1,0 +1,738 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum VerificationStatus {
+  PENDING
+  NEEDS_INFORMATION
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum TrainingSessionStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  COMPLETED
+  CANCELLED
+}
+
+enum TrainingRegistrationStatus {
+  REGISTERED
+  CANCELLED
+  ATTENDED
+  NO_SHOW
+}
+
+enum AttendanceStatus {
+  ATTENDED
+  NO_SHOW
+}
+
+enum ProductionStatus {
+  PLANNED
+  ACTIVE
+  REPORTING
+  COMPLETED
+  FAILED
+  ABANDONED
+}
+
+enum HarvestStatus {
+  SUBMITTED
+  RECEIVED
+  WEIGHED
+  GRADED
+  ACCEPTED
+  PARTIALLY_ACCEPTED
+  REJECTED
+}
+
+enum QualityGrade {
+  A
+  B
+  C
+  D
+}
+
+enum HarvestDecisionStatus {
+  ACCEPTED
+  PARTIALLY_ACCEPTED
+  REJECTED
+}
+
+enum ProductKind {
+  MUSHROOM
+  MUSHROOM_BAG
+}
+
+enum InventoryMovementType {
+  HARVEST_RECEIPT
+  RESERVATION
+  RESERVATION_RELEASE
+  DISPATCH
+  SPOILAGE
+  ADJUSTMENT
+  REVERSAL
+}
+
+enum BuyerOrderStatus {
+  PLACED
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  READY
+  DISPATCHED
+  DELIVERED
+}
+
+enum FulfillmentMethod {
+  PICKUP
+  DELIVERY
+}
+
+enum PaymentDirection {
+  FARMER_PAYOUT
+  BUYER_RECEIPT
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  UPI
+  OTHER
+}
+
+enum LedgerEntryType {
+  CREDIT
+  DEBIT
+  REVERSAL
+  ADJUSTMENT
+}
+
+enum PaymentAllocationType {
+  ALLOCATION
+  REVERSAL
+}
+
+model User {
+  id                  String                       @id @default(uuid()) @db.Uuid
+  phoneE164           String?                      @unique @map("phone_e164") @db.VarChar(16)
+  phoneVerifiedAt     DateTime?                    @map("phone_verified_at") @db.Timestamptz(6)
+  status              AccountStatus                @default(ACTIVE)
+  createdAt           DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  farmerProfile       FarmerProfile?
+  buyerProfile        BuyerProfile?
+  roleGrants          UserRole[]                   @relation("RoleTarget")
+  rolesGranted        UserRole[]                   @relation("RoleGrantedBy")
+  rolesRevoked        UserRole[]                   @relation("RoleRevokedBy")
+  verificationsMade   FarmerVerification[]         @relation("VerificationReviewer")
+  trainingSessions    TrainingSession[]            @relation("TrainingCreator")
+  attendanceRecorded  TrainingAttendance[]         @relation("AttendanceRecorder")
+  bagBatchesCreated   MushroomBagBatch[]           @relation("BagBatchCreator")
+  bagDistributions    BagDistribution[]            @relation("DistributionCreator")
+  productionRecords   ProductionRecord[]           @relation("ProductionReporter")
+  harvestsReceived    HarvestSubmission[]          @relation("HarvestReceiver")
+  weighingsRecorded   WeighingRecord[]             @relation("WeighingOperator")
+  decisionsMade       HarvestDecision[]            @relation("HarvestDecisionMaker")
+  inventoryMovements  InventoryMovement[]          @relation("InventoryMovementActor")
+  dispatchesRecorded  DispatchRecord[]             @relation("DispatchRecorder")
+  farmerLedgerEntries FarmerPayableLedgerEntry[]   @relation("FarmerLedgerRecorder")
+  buyerLedgerEntries  BuyerReceivableLedgerEntry[] @relation("BuyerLedgerRecorder")
+  paymentsRecorded    Payment[]                    @relation("PaymentRecorder")
+  expensesRecorded    Expense[]                    @relation("ExpenseRecorder")
+  auditEvents         AuditLog[]                   @relation("AuditActor")
+  idempotencyKeys     IdempotencyKey[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String           @id @default(uuid()) @db.Uuid
+  code        String           @unique @db.VarChar(40)
+  name        String           @db.VarChar(80)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  userRoles   UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id        String           @id @default(uuid()) @db.Uuid
+  code      String           @unique @db.VarChar(80)
+  name      String           @db.VarChar(120)
+  roleLinks RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Restrict)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  roleId           String    @map("role_id") @db.Uuid
+  grantedById      String?   @map("granted_by_id") @db.Uuid
+  revokedById      String?   @map("revoked_by_id") @db.Uuid
+  grantedAt        DateTime  @default(now()) @map("granted_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
+  grantReason      String    @map("grant_reason") @db.VarChar(500)
+  revocationReason String?   @map("revocation_reason") @db.VarChar(500)
+  user             User      @relation("RoleTarget", fields: [userId], references: [id], onDelete: Restrict)
+  role             Role      @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  grantedBy        User?     @relation("RoleGrantedBy", fields: [grantedById], references: [id], onDelete: Restrict)
+  revokedBy        User?     @relation("RoleRevokedBy", fields: [revokedById], references: [id], onDelete: Restrict)
+
+  @@index([userId, roleId, revokedAt])
+  @@map("user_roles")
+}
+
+model FarmerProfile {
+  id             String                     @id @default(uuid()) @db.Uuid
+  userId         String                     @unique @map("user_id") @db.Uuid
+  fullName       String                     @map("full_name") @db.VarChar(120)
+  state          String                     @db.VarChar(100)
+  district       String                     @db.VarChar(100)
+  locality       String                     @db.VarChar(160)
+  pinCode        String                     @map("pin_code") @db.VarChar(6)
+  createdAt      DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user           User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  verifications  FarmerVerification[]
+  registrations  TrainingRegistration[]
+  distributions  BagDistribution[]
+  production     ProductionRecord[]
+  harvests       HarvestSubmission[]
+  payableEntries FarmerPayableLedgerEntry[]
+
+  @@index([district, locality])
+  @@map("farmer_profiles")
+}
+
+model BuyerProfile {
+  id                 String                       @id @default(uuid()) @db.Uuid
+  userId             String                       @unique @map("user_id") @db.Uuid
+  contactName        String                       @map("contact_name") @db.VarChar(120)
+  businessName       String                       @map("business_name") @db.VarChar(160)
+  businessType       String                       @map("business_type") @db.VarChar(40)
+  state              String                       @db.VarChar(100)
+  district           String                       @db.VarChar(100)
+  locality           String                       @db.VarChar(160)
+  pinCode            String                       @map("pin_code") @db.VarChar(6)
+  verificationStatus VerificationStatus           @default(PENDING) @map("verification_status")
+  createdAt          DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user               User                         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  orders             BuyerOrder[]
+  receivableEntries  BuyerReceivableLedgerEntry[]
+
+  @@index([district, businessName])
+  @@map("buyer_profiles")
+}
+
+model FarmerVerification {
+  id           String             @id @default(uuid()) @db.Uuid
+  farmerId     String             @map("farmer_id") @db.Uuid
+  status       VerificationStatus @default(PENDING)
+  evidenceKeys String[]           @default([]) @map("evidence_keys")
+  reviewerId   String?            @map("reviewer_id") @db.Uuid
+  reason       String?            @db.VarChar(1000)
+  submittedAt  DateTime           @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  reviewedAt   DateTime?          @map("reviewed_at") @db.Timestamptz(6)
+  farmer       FarmerProfile      @relation(fields: [farmerId], references: [id], onDelete: Restrict)
+  reviewer     User?              @relation("VerificationReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+
+  @@index([status, submittedAt])
+  @@index([farmerId, submittedAt])
+  @@map("farmer_verifications")
+}
+
+model TrainingSession {
+  id            String                 @id @default(uuid()) @db.Uuid
+  title         String                 @db.VarChar(160)
+  description   String?
+  startsAt      DateTime               @map("starts_at") @db.Timestamptz(6)
+  endsAt        DateTime               @map("ends_at") @db.Timestamptz(6)
+  location      String                 @db.VarChar(240)
+  capacity      Int?
+  status        TrainingSessionStatus  @default(DRAFT)
+  createdById   String?                @map("created_by_id") @db.Uuid
+  createdAt     DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy     User?                  @relation("TrainingCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  registrations TrainingRegistration[]
+
+  @@index([status, startsAt])
+  @@map("training_sessions")
+}
+
+model TrainingRegistration {
+  id           String                     @id @default(uuid()) @db.Uuid
+  sessionId    String                     @map("session_id") @db.Uuid
+  farmerId     String                     @map("farmer_id") @db.Uuid
+  status       TrainingRegistrationStatus @default(REGISTERED)
+  registeredAt DateTime                   @default(now()) @map("registered_at") @db.Timestamptz(6)
+  session      TrainingSession            @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  farmer       FarmerProfile              @relation(fields: [farmerId], references: [id], onDelete: Restrict)
+  attendance   TrainingAttendance?
+
+  @@unique([sessionId, farmerId])
+  @@index([farmerId, registeredAt])
+  @@map("training_registrations")
+}
+
+model TrainingAttendance {
+  id             String               @id @default(uuid()) @db.Uuid
+  registrationId String               @unique @map("registration_id") @db.Uuid
+  status         AttendanceStatus
+  recordedAt     DateTime             @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  recordedById   String?              @map("recorded_by_id") @db.Uuid
+  notes          String?
+  registration   TrainingRegistration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  recordedBy     User?                @relation("AttendanceRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+
+  @@index([recordedAt])
+  @@map("training_attendance")
+}
+
+model MushroomBagBatch {
+  id                String            @id @default(uuid()) @db.Uuid
+  batchCode         String            @unique @map("batch_code") @db.VarChar(80)
+  producedAt        DateTime          @map("produced_at") @db.Timestamptz(6)
+  expiresAt         DateTime?         @map("expires_at") @db.Timestamptz(6)
+  quantityProduced  Decimal           @map("quantity_produced") @db.Decimal(14, 3)
+  quantityAvailable Decimal           @map("quantity_available") @db.Decimal(14, 3)
+  unitCode          String            @default("bag") @map("unit_code") @db.VarChar(20)
+  createdById       String?           @map("created_by_id") @db.Uuid
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy         User?             @relation("BagBatchCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  distributions     BagDistribution[]
+
+  @@index([expiresAt, quantityAvailable])
+  @@map("mushroom_bag_batches")
+}
+
+model BagDistribution {
+  id                String             @id @default(uuid()) @db.Uuid
+  batchId           String             @map("batch_id") @db.Uuid
+  farmerId          String             @map("farmer_id") @db.Uuid
+  quantity          Decimal            @db.Decimal(14, 3)
+  distributedAt     DateTime           @default(now()) @map("distributed_at") @db.Timestamptz(6)
+  notes             String?
+  createdById       String?            @map("created_by_id") @db.Uuid
+  batch             MushroomBagBatch   @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  farmer            FarmerProfile      @relation(fields: [farmerId], references: [id], onDelete: Restrict)
+  createdBy         User?              @relation("DistributionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  productionRecords ProductionRecord[]
+
+  @@index([farmerId, distributedAt])
+  @@index([batchId, distributedAt])
+  @@map("bag_distributions")
+}
+
+model ProductionRecord {
+  id              String              @id @default(uuid()) @db.Uuid
+  farmerId        String              @map("farmer_id") @db.Uuid
+  distributionId  String?             @map("distribution_id") @db.Uuid
+  status          ProductionStatus    @default(PLANNED)
+  startedAt       DateTime?           @map("started_at") @db.Timestamptz(6)
+  reportedAt      DateTime?           @map("reported_at") @db.Timestamptz(6)
+  expectedYieldKg Decimal?            @map("expected_yield_kg") @db.Decimal(14, 3)
+  actualYieldKg   Decimal?            @map("actual_yield_kg") @db.Decimal(14, 3)
+  notes           String?
+  reportedById    String?             @map("reported_by_id") @db.Uuid
+  farmer          FarmerProfile       @relation(fields: [farmerId], references: [id], onDelete: Restrict)
+  distribution    BagDistribution?    @relation(fields: [distributionId], references: [id], onDelete: Restrict)
+  reportedBy      User?               @relation("ProductionReporter", fields: [reportedById], references: [id], onDelete: Restrict)
+  harvests        HarvestSubmission[]
+
+  @@index([farmerId, status, startedAt])
+  @@map("production_records")
+}
+
+model CollectionCentre {
+  id        String              @id @default(uuid()) @db.Uuid
+  code      String              @unique @db.VarChar(40)
+  name      String              @db.VarChar(160)
+  address   String?
+  active    Boolean             @default(true)
+  createdAt DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  harvests  HarvestSubmission[]
+  weighings WeighingRecord[]
+  inventory InventoryBatch[]
+
+  @@map("collection_centres")
+}
+
+model HarvestSubmission {
+  id                 String               @id @default(uuid()) @db.Uuid
+  farmerId           String               @map("farmer_id") @db.Uuid
+  productionId       String?              @map("production_id") @db.Uuid
+  status             HarvestStatus        @default(SUBMITTED)
+  submittedWeightKg  Decimal?             @map("submitted_weight_kg") @db.Decimal(14, 3)
+  submittedAt        DateTime             @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  collectionCentreId String?              @map("collection_centre_id") @db.Uuid
+  receivedAt         DateTime?            @map("received_at") @db.Timestamptz(6)
+  receivedById       String?              @map("received_by_id") @db.Uuid
+  farmer             FarmerProfile        @relation(fields: [farmerId], references: [id], onDelete: Restrict)
+  production         ProductionRecord?    @relation(fields: [productionId], references: [id], onDelete: Restrict)
+  collectionCentre   CollectionCentre?    @relation(fields: [collectionCentreId], references: [id], onDelete: Restrict)
+  receivedBy         User?                @relation("HarvestReceiver", fields: [receivedById], references: [id], onDelete: Restrict)
+  weighings          WeighingRecord[]
+  grades             HarvestGradeResult[]
+  decisions          HarvestDecision[]
+  inventoryBatches   InventoryBatch[]
+
+  @@index([farmerId, submittedAt])
+  @@index([status, submittedAt])
+  @@map("harvest_submissions")
+}
+
+model WeighingRecord {
+  id                 String            @id @default(uuid()) @db.Uuid
+  harvestId          String            @map("harvest_id") @db.Uuid
+  collectionCentreId String            @map("collection_centre_id") @db.Uuid
+  grossWeightKg      Decimal           @map("gross_weight_kg") @db.Decimal(14, 3)
+  tareWeightKg       Decimal           @map("tare_weight_kg") @db.Decimal(14, 3)
+  netWeightKg        Decimal           @map("net_weight_kg") @db.Decimal(14, 3)
+  scaleReference     String?           @map("scale_reference") @db.VarChar(100)
+  weighedAt          DateTime          @default(now()) @map("weighed_at") @db.Timestamptz(6)
+  weighedById        String            @map("weighed_by_id") @db.Uuid
+  harvest            HarvestSubmission @relation(fields: [harvestId], references: [id], onDelete: Restrict)
+  collectionCentre   CollectionCentre  @relation(fields: [collectionCentreId], references: [id], onDelete: Restrict)
+  weighedBy          User              @relation("WeighingOperator", fields: [weighedById], references: [id], onDelete: Restrict)
+
+  @@index([harvestId, weighedAt])
+  @@map("weighing_records")
+}
+
+model HarvestGradeResult {
+  id                String            @id @default(uuid()) @db.Uuid
+  harvestId         String            @map("harvest_id") @db.Uuid
+  grade             QualityGrade
+  inspectedWeightKg Decimal           @map("inspected_weight_kg") @db.Decimal(14, 3)
+  acceptedWeightKg  Decimal           @default(0) @map("accepted_weight_kg") @db.Decimal(14, 3)
+  rejectedWeightKg  Decimal           @default(0) @map("rejected_weight_kg") @db.Decimal(14, 3)
+  ratePerKg         Decimal?          @map("rate_per_kg") @db.Decimal(14, 2)
+  criteriaVersion   String?           @map("criteria_version") @db.VarChar(40)
+  inspectedAt       DateTime          @default(now()) @map("inspected_at") @db.Timestamptz(6)
+  harvest           HarvestSubmission @relation(fields: [harvestId], references: [id], onDelete: Restrict)
+  inventoryBatch    InventoryBatch?
+
+  @@unique([harvestId, grade])
+  @@index([grade, inspectedAt])
+  @@map("harvest_grade_results")
+}
+
+model HarvestDecision {
+  id             String                     @id @default(uuid()) @db.Uuid
+  harvestId      String                     @map("harvest_id") @db.Uuid
+  status         HarvestDecisionStatus
+  reason         String?
+  decidedAt      DateTime                   @default(now()) @map("decided_at") @db.Timestamptz(6)
+  decidedById    String                     @map("decided_by_id") @db.Uuid
+  harvest        HarvestSubmission          @relation(fields: [harvestId], references: [id], onDelete: Restrict)
+  decidedBy      User                       @relation("HarvestDecisionMaker", fields: [decidedById], references: [id], onDelete: Restrict)
+  payableEntries FarmerPayableLedgerEntry[]
+
+  @@index([harvestId, decidedAt])
+  @@map("harvest_decisions")
+}
+
+model Product {
+  id               String           @id @default(uuid()) @db.Uuid
+  sku              String           @unique @db.VarChar(80)
+  name             String           @db.VarChar(160)
+  kind             ProductKind
+  unitCode         String           @map("unit_code") @db.VarChar(20)
+  active           Boolean          @default(true)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  inventoryBatches InventoryBatch[]
+  orderItems       BuyerOrderItem[]
+
+  @@index([kind, active])
+  @@map("products")
+}
+
+model InventoryBatch {
+  id                 String              @id @default(uuid()) @db.Uuid
+  batchCode          String              @unique @map("batch_code") @db.VarChar(80)
+  productId          String              @map("product_id") @db.Uuid
+  harvestId          String?             @map("harvest_id") @db.Uuid
+  gradeResultId      String?             @unique @map("grade_result_id") @db.Uuid
+  collectionCentreId String              @map("collection_centre_id") @db.Uuid
+  receivedQuantity   Decimal             @map("received_quantity") @db.Decimal(14, 3)
+  quantityOnHand     Decimal             @map("quantity_on_hand") @db.Decimal(14, 3)
+  quantityReserved   Decimal             @default(0) @map("quantity_reserved") @db.Decimal(14, 3)
+  expiresAt          DateTime?           @map("expires_at") @db.Timestamptz(6)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  product            Product             @relation(fields: [productId], references: [id], onDelete: Restrict)
+  harvest            HarvestSubmission?  @relation(fields: [harvestId], references: [id], onDelete: Restrict)
+  gradeResult        HarvestGradeResult? @relation(fields: [gradeResultId], references: [id], onDelete: Restrict)
+  collectionCentre   CollectionCentre    @relation(fields: [collectionCentreId], references: [id], onDelete: Restrict)
+  movements          InventoryMovement[]
+
+  @@index([productId, expiresAt])
+  @@index([collectionCentreId, productId])
+  @@map("inventory_batches")
+}
+
+model InventoryMovement {
+  id            String                @id @default(uuid()) @db.Uuid
+  batchId       String                @map("batch_id") @db.Uuid
+  type          InventoryMovementType
+  onHandDelta   Decimal               @map("on_hand_delta") @db.Decimal(14, 3)
+  reservedDelta Decimal               @map("reserved_delta") @db.Decimal(14, 3)
+  orderItemId   String?               @map("order_item_id") @db.Uuid
+  reversalOfId  String?               @map("reversal_of_id") @db.Uuid
+  reason        String?
+  actorId       String?               @map("actor_id") @db.Uuid
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  batch         InventoryBatch        @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  orderItem     BuyerOrderItem?       @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  reversalOf    InventoryMovement?    @relation("InventoryReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversals     InventoryMovement[]   @relation("InventoryReversal")
+  actor         User?                 @relation("InventoryMovementActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([batchId, createdAt])
+  @@index([orderItemId])
+  @@map("inventory_movements")
+}
+
+model BuyerOrder {
+  id                String                       @id @default(uuid()) @db.Uuid
+  reference         String                       @unique @db.VarChar(40)
+  buyerId           String                       @map("buyer_id") @db.Uuid
+  status            BuyerOrderStatus             @default(PLACED)
+  fulfillment       FulfillmentMethod
+  deliveryAddress   String?                      @map("delivery_address")
+  currency          String                       @default("INR") @db.Char(3)
+  placedAt          DateTime                     @default(now()) @map("placed_at") @db.Timestamptz(6)
+  updatedAt         DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  buyer             BuyerProfile                 @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+  items             BuyerOrderItem[]
+  dispatches        DispatchRecord[]
+  receivableEntries BuyerReceivableLedgerEntry[]
+
+  @@index([buyerId, placedAt])
+  @@index([status, placedAt])
+  @@map("buyer_orders")
+}
+
+model BuyerOrderItem {
+  id                 String              @id @default(uuid()) @db.Uuid
+  orderId            String              @map("order_id") @db.Uuid
+  productId          String              @map("product_id") @db.Uuid
+  quantity           Decimal             @db.Decimal(14, 3)
+  unitCode           String              @map("unit_code") @db.VarChar(20)
+  unitPrice          Decimal             @map("unit_price") @db.Decimal(14, 2)
+  currency           String              @default("INR") @db.Char(3)
+  inventoryMovements InventoryMovement[]
+  order              BuyerOrder          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  product            Product             @relation(fields: [productId], references: [id], onDelete: Restrict)
+  dispatchItems      DispatchItem[]
+
+  @@index([orderId])
+  @@map("buyer_order_items")
+}
+
+model DispatchRecord {
+  id             String         @id @default(uuid()) @db.Uuid
+  orderId        String         @map("order_id") @db.Uuid
+  reference      String?        @unique @db.VarChar(80)
+  dispatchedAt   DateTime       @default(now()) @map("dispatched_at") @db.Timestamptz(6)
+  deliveredAt    DateTime?      @map("delivered_at") @db.Timestamptz(6)
+  recipient      String?        @db.VarChar(160)
+  proofObjectKey String?        @map("proof_object_key")
+  recordedById   String?        @map("recorded_by_id") @db.Uuid
+  notes          String?
+  order          BuyerOrder     @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  recordedBy     User?          @relation("DispatchRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  items          DispatchItem[]
+
+  @@index([orderId, dispatchedAt])
+  @@map("dispatch_records")
+}
+
+model DispatchItem {
+  id          String         @id @default(uuid()) @db.Uuid
+  dispatchId  String         @map("dispatch_id") @db.Uuid
+  orderItemId String         @map("order_item_id") @db.Uuid
+  quantity    Decimal        @db.Decimal(14, 3)
+  dispatch    DispatchRecord @relation(fields: [dispatchId], references: [id], onDelete: Restrict)
+  orderItem   BuyerOrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+
+  @@unique([dispatchId, orderItemId])
+  @@index([orderItemId])
+  @@map("dispatch_items")
+}
+
+model FarmerPayableLedgerEntry {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  farmerId           String                     @map("farmer_id") @db.Uuid
+  harvestDecisionId  String?                    @map("harvest_decision_id") @db.Uuid
+  type               LedgerEntryType
+  amount             Decimal                    @db.Decimal(14, 2)
+  currency           String                     @default("INR") @db.Char(3)
+  sourceReference    String                     @map("source_reference") @db.VarChar(120)
+  reversalOfId       String?                    @map("reversal_of_id") @db.Uuid
+  note               String?
+  recordedById       String?                    @map("recorded_by_id") @db.Uuid
+  createdAt          DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  farmer             FarmerProfile              @relation(fields: [farmerId], references: [id], onDelete: Restrict)
+  harvestDecision    HarvestDecision?           @relation(fields: [harvestDecisionId], references: [id], onDelete: Restrict)
+  reversalOf         FarmerPayableLedgerEntry?  @relation("FarmerLedgerReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversals          FarmerPayableLedgerEntry[] @relation("FarmerLedgerReversal")
+  recordedBy         User?                      @relation("FarmerLedgerRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  paymentAllocations PaymentAllocation[]
+
+  @@unique([farmerId, sourceReference])
+  @@index([farmerId, createdAt])
+  @@index([harvestDecisionId])
+  @@map("farmer_payable_ledger")
+}
+
+model BuyerReceivableLedgerEntry {
+  id                 String                       @id @default(uuid()) @db.Uuid
+  buyerId            String                       @map("buyer_id") @db.Uuid
+  orderId            String?                      @map("order_id") @db.Uuid
+  type               LedgerEntryType
+  amount             Decimal                      @db.Decimal(14, 2)
+  currency           String                       @default("INR") @db.Char(3)
+  sourceReference    String                       @map("source_reference") @db.VarChar(120)
+  reversalOfId       String?                      @map("reversal_of_id") @db.Uuid
+  dueAt              DateTime?                    @map("due_at") @db.Timestamptz(6)
+  note               String?
+  recordedById       String?                      @map("recorded_by_id") @db.Uuid
+  createdAt          DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  buyer              BuyerProfile                 @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+  order              BuyerOrder?                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  reversalOf         BuyerReceivableLedgerEntry?  @relation("BuyerLedgerReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversals          BuyerReceivableLedgerEntry[] @relation("BuyerLedgerReversal")
+  recordedBy         User?                        @relation("BuyerLedgerRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  paymentAllocations PaymentAllocation[]
+
+  @@unique([buyerId, sourceReference])
+  @@index([buyerId, createdAt])
+  @@index([orderId])
+  @@map("buyer_receivable_ledger")
+}
+
+model Payment {
+  id           String              @id @default(uuid()) @db.Uuid
+  direction    PaymentDirection
+  amount       Decimal             @db.Decimal(14, 2)
+  currency     String              @default("INR") @db.Char(3)
+  method       PaymentMethod
+  reference    String?             @db.VarChar(160)
+  transferAt   DateTime?           @map("transfer_at") @db.Timestamptz(6)
+  reversalOfId String?             @map("reversal_of_id") @db.Uuid
+  recordedById String?             @map("recorded_by_id") @db.Uuid
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  reversalOf   Payment?            @relation("PaymentReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversals    Payment[]           @relation("PaymentReversal")
+  recordedBy   User?               @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  allocations  PaymentAllocation[]
+
+  @@index([direction, createdAt])
+  @@index([reference])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id                     String                      @id @default(uuid()) @db.Uuid
+  paymentId              String                      @map("payment_id") @db.Uuid
+  farmerPayableEntryId   String?                     @map("farmer_payable_entry_id") @db.Uuid
+  buyerReceivableEntryId String?                     @map("buyer_receivable_entry_id") @db.Uuid
+  type                   PaymentAllocationType       @default(ALLOCATION)
+  reversalOfId           String?                     @map("reversal_of_id") @db.Uuid
+  amount                 Decimal                     @db.Decimal(14, 2)
+  allocatedAt            DateTime                    @default(now()) @map("allocated_at") @db.Timestamptz(6)
+  payment                Payment                     @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  farmerPayableEntry     FarmerPayableLedgerEntry?   @relation(fields: [farmerPayableEntryId], references: [id], onDelete: Restrict)
+  buyerReceivableEntry   BuyerReceivableLedgerEntry? @relation(fields: [buyerReceivableEntryId], references: [id], onDelete: Restrict)
+  reversalOf             PaymentAllocation?          @relation("PaymentAllocationReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversals              PaymentAllocation[]         @relation("PaymentAllocationReversal")
+
+  @@index([paymentId])
+  @@index([farmerPayableEntryId])
+  @@index([buyerReceivableEntryId])
+  @@index([reversalOfId])
+  @@map("payment_allocations")
+}
+
+model Expense {
+  id               String    @id @default(uuid()) @db.Uuid
+  category         String    @db.VarChar(80)
+  amount           Decimal   @db.Decimal(14, 2)
+  currency         String    @default("INR") @db.Char(3)
+  incurredAt       DateTime  @map("incurred_at") @db.Timestamptz(6)
+  description      String?
+  receiptObjectKey String?   @map("receipt_object_key")
+  reversalOfId     String?   @map("reversal_of_id") @db.Uuid
+  recordedById     String?   @map("recorded_by_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  reversalOf       Expense?  @relation("ExpenseReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversals        Expense[] @relation("ExpenseReversal")
+  recordedBy       User?     @relation("ExpenseRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+
+  @@index([incurredAt, category])
+  @@map("expenses")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String   @db.VarChar(100)
+  entityType String   @map("entity_type") @db.VarChar(100)
+  entityId   String?  @map("entity_id") @db.VarChar(100)
+  requestId  String?  @map("request_id") @db.VarChar(100)
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
+}
+
+model IdempotencyKey {
+  id           String   @id @default(uuid()) @db.Uuid
+  actorId      String   @map("actor_id") @db.Uuid
+  operation    String   @db.VarChar(120)
+  key          String   @db.VarChar(200)
+  requestHash  String   @map("request_hash") @db.VarChar(128)
+  resourceType String?  @map("resource_type") @db.VarChar(100)
+  resourceId   String?  @map("resource_id") @db.VarChar(100)
+  expiresAt    DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  actor        User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@unique([actorId, operation, key])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}

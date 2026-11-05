@@ -1,6 +1,8 @@
 # Mushroom Hub production database specification
 
-**Status:** finalized design specification only. This is not migration SQL and does not create or connect to Supabase. The existing browser-local demo and its workflows remain unchanged. Nothing in this document asserts that a database, authentication provider, RLS policy, migration, or cloud infrastructure has been implemented.
+> **Historical planning snapshot:** This specification was written for Supabase/PostgreSQL and includes Supabase Auth, RLS, and operator-process assumptions. On 2026-11-04 the approved target changed to Express + TypeScript + Prisma + Neon PostgreSQL. This file is not the active Prisma schema or an approved migration; use [the current schema overview](./database-schema-overview.md) and `backend/prisma/schema.prisma` for the implementation foundation. No database was connected or migrated by that decision.
+
+**Status:** historical Supabase design specification only. It is not migration SQL and does not create or connect to any database.
 
 ## 1. Scope, conventions, and assumptions
 
