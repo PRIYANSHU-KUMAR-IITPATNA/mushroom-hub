@@ -16,6 +16,8 @@ describe('environment configuration', () => {
     assert.equal(environment.PORT, 8080)
     assert.equal(environment.NODE_ENV, 'development')
     assert.deepEqual(environment.CORS_ORIGINS, ['http://localhost:5173'])
+    assert.equal(environment.BREVO_SMS_ENABLED, false)
+    assert.equal(environment.BREVO_SMS_TIMEOUT_MS, 10000)
   })
 
   it('accepts comma-separated explicit CORS origins', () => {
@@ -123,6 +125,37 @@ describe('environment configuration', () => {
     assert.equal(parseEnvironment({ ...validEnvironment, OTP_HASH_SECRET: '' }).OTP_HASH_SECRET, undefined)
     assert.throws(
       () => parseEnvironment({ ...validEnvironment, OTP_HASH_SECRET: 'too-short' }),
+      EnvironmentValidationError,
+    )
+  })
+
+  it('requires Brevo credentials, an approved sender, and an OTP secret when SMS is enabled', () => {
+    assert.throws(
+      () => parseEnvironment({ ...validEnvironment, BREVO_SMS_ENABLED: 'true' }),
+      (error: unknown) => {
+        assert.ok(error instanceof EnvironmentValidationError)
+        assert.deepEqual(
+          error.issues.map((issue) => issue.path[0]).sort(),
+          ['BREVO_API_KEY', 'BREVO_SMS_SENDER', 'OTP_HASH_SECRET'],
+        )
+        return true
+      },
+    )
+  })
+
+  it('validates Brevo sender shape and request timeout', () => {
+    assert.throws(
+      () => parseEnvironment({
+        ...validEnvironment,
+        BREVO_SMS_SENDER: 'invalid sender id',
+      }),
+      EnvironmentValidationError,
+    )
+    assert.throws(
+      () => parseEnvironment({
+        ...validEnvironment,
+        BREVO_SMS_TIMEOUT_MS: '500',
+      }),
       EnvironmentValidationError,
     )
   })

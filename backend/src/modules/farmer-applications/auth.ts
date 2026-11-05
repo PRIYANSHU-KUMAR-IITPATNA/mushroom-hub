@@ -6,6 +6,7 @@ import { getPrismaClient } from '../../config/database.js'
 import { HttpError } from '../../middleware/errors.js'
 import { validateBody } from '../../middleware/request-validation.js'
 import { logger } from '../../utils/logger.js'
+import { BrevoSmsError } from './brevo-sms-provider.js'
 import type { SmsProvider } from './sms-provider.js'
 
 const SESSION_COOKIE = 'mh_session'
@@ -217,7 +218,9 @@ export function createAuthRouter(smsProvider?: SmsProvider): Router {
         logger.error(
           {
             requestId: response.locals.requestId,
-            errorName: error instanceof Error ? error.name : 'UnknownError',
+            ...(error instanceof BrevoSmsError
+              ? { providerFailure: error.failure, providerStatusCode: error.statusCode }
+              : { errorName: error instanceof Error ? error.name : 'UnknownError' }),
           },
           'SMS OTP delivery failed',
         )

@@ -4,6 +4,7 @@ import { parseEnvironment, EnvironmentValidationError } from './config/env.js'
 import { connectDatabase, disconnectDatabase } from './config/database.js'
 import { createApp } from './app.js'
 import { logger } from './utils/logger.js'
+import { BrevoSmsProvider } from './modules/farmer-applications/brevo-sms-provider.js'
 
 async function startServer(): Promise<void> {
   let environment
@@ -26,10 +27,25 @@ async function startServer(): Promise<void> {
     throw error
   }
 
+  let smsProvider: BrevoSmsProvider | undefined
+  if (environment.BREVO_SMS_ENABLED) {
+    const apiKey = environment.BREVO_API_KEY
+    const sender = environment.BREVO_SMS_SENDER
+    if (!apiKey || !sender) {
+      throw new Error('Brevo SMS configuration is incomplete')
+    }
+    smsProvider = new BrevoSmsProvider({
+      apiKey,
+      sender,
+      timeoutMs: environment.BREVO_SMS_TIMEOUT_MS,
+    })
+  }
+
   await connectDatabase()
   const server = createServer(
     createApp({
       corsOrigins: environment.CORS_ORIGINS,
+      smsProvider,
     }),
   )
 
