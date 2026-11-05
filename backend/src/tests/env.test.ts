@@ -118,4 +118,12 @@ describe('environment configuration', () => {
       EnvironmentValidationError,
     )
   })
+
+  it('accepts an unset OTP hash secret but rejects weak configured values', () => {
+    assert.equal(parseEnvironment({ ...validEnvironment, OTP_HASH_SECRET: '' }).OTP_HASH_SECRET, undefined)
+    assert.throws(
+      () => parseEnvironment({ ...validEnvironment, OTP_HASH_SECRET: 'too-short' }),
+      EnvironmentValidationError,
+    )
+  })
 })

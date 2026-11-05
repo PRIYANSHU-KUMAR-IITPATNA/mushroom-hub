@@ -6,7 +6,7 @@ import LanguageSwitcher from '../components/ui/LanguageSwitcher'
 import type { BuyerDemoData, BuyerOrder, BuyerEnquiry } from '../buyer/types'
 import { loadBuyerData, saveBuyerData } from '../buyer/storage'
 import { adminText, type AdminTranslationKey } from '../i18n/adminTranslations'
-import type { Language } from '../i18n/translations'
+import { translate, type Language } from '../i18n/translations'
 import {
   acceptedHarvestOutstanding,
   acceptedHarvestValue,
@@ -1024,6 +1024,9 @@ function AdminPortal({
                 const href = item.slug ? `/admin/${item.slug}` : '/admin'
                 return <a className="portal-nav__link" href={href} key={item.id} aria-current={section === item.id ? 'page' : undefined}>{t(item.key)}</a>
               })}
+              <a className="portal-nav__link" href="/admin/farmer-applications">
+                {translate(language, 'adminFarmerApplications')}
+              </a>
             </Container>
           </nav>
           {stores.warning && <Container><p className="portal-warning" role="status">{t('invalidStorage')}</p></Container>}

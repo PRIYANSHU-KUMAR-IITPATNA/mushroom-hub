@@ -26,6 +26,9 @@ Edit `backend/.env` locally. Never paste real values into source files, commits,
 | `PORT` | HTTP port; defaults to `8080`, as required by Cloud Run. |
 | `NODE_ENV` | `development`, `test`, or `production`; defaults to `development`. |
 | `CORS_ORIGINS` | Comma-separated exact browser origins, e.g. `http://localhost:5173`. Do not use `*`. |
+| `OTP_HASH_SECRET` | Optional until a real SMS adapter is selected; when set, use at least 32 random characters and keep it server-side. It is used to HMAC OTP values and IP identifiers. |
+
+No SMS vendor has been selected or integrated. The app factory accepts a `SmsProvider` adapter for controlled integration tests or a future approved provider, but the normal server starts without one and OTP requests return `503 OTP_PROVIDER_UNAVAILABLE`. There is no development OTP bypass. Do not treat the onboarding flow as live until a real adapter and its server-only credentials have been configured.
 
 Use separate Neon databases/branches and distinct credentials for local development, staging, and production. Confirm the hostname and database before running any migration. The committed `.env.example` contains placeholders only; `.env` and other private environment files are ignored by Git.
 
@@ -69,4 +72,4 @@ Tests compile the TypeScript and run Node's built-in test runner with Supertest.
 
 ## Cloud Run preparation (no deployment)
 
-`backend/Dockerfile` builds a Node 22 image. At a future deployment, configure Cloud Run's injected `PORT`, runtime secrets `DATABASE_URL` and `DIRECT_DATABASE_URL`, `NODE_ENV=production`, and an explicit production `CORS_ORIGINS` allowlist. Configure the Vercel frontend API base URL only in a separately reviewed frontend change. This repository does not run `gcloud`, create a service, enable billing, configure DNS, or deploy.
+`backend/Dockerfile` builds a Node 22 image. At a future deployment, configure Cloud Run's injected `PORT`, runtime secrets `DATABASE_URL`, `DIRECT_DATABASE_URL`, and `OTP_HASH_SECRET`, `NODE_ENV=production`, and an explicit production `CORS_ORIGINS` allowlist. Add provider-specific SMS credentials only after selecting and implementing a vendor adapter. Configure the Vercel `VITE_API_BASE_URL` to the Cloud Run API's `/api/v1` URL. The onboarding migration has not been applied to any database. This repository does not run `gcloud`, create a service, enable billing, configure DNS, or deploy.

@@ -37,6 +37,10 @@ const corsOriginsSchema = z
 const environmentSchema = z.object({
   DATABASE_URL: databaseUrlSchema,
   DIRECT_DATABASE_URL: databaseUrlSchema,
+  OTP_HASH_SECRET: z.preprocess(
+    (value) => value === '' ? undefined : value,
+    z.string().min(32).optional(),
+  ),
   PORT: z.coerce.number().int().min(1).max(65535).default(8080),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   CORS_ORIGINS: corsOriginsSchema,

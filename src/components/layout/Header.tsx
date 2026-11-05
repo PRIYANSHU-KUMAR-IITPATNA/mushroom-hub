@@ -6,6 +6,7 @@ import { translate } from '../../i18n/translations'
 type HeaderProps = {
   language: Language
   onLanguageChange: (language: Language) => void
+  isHome?: boolean
 }
 
 const navigation: { label: TranslationKey; href: string }[] = [
@@ -15,11 +16,18 @@ const navigation: { label: TranslationKey; href: string }[] = [
   { label: 'navAbout', href: '#about' },
 ]
 
-function Header({ language, onLanguageChange }: HeaderProps) {
+function Header({ language, onLanguageChange, isHome = true }: HeaderProps) {
+  const sectionHref = (section: string) =>
+    isHome ? `#${section}` : `/#${section}`
+
   return (
     <header className="site-header" id="top">
       <Container className="site-header__inner">
-        <a className="brand" href="#top" aria-label={translate(language, 'brandName')}>
+        <a
+          className="brand"
+          href={isHome ? '#top' : '/'}
+          aria-label={translate(language, 'brandName')}
+        >
           <span className="brand__mark" aria-hidden="true">
             M
           </span>
@@ -36,7 +44,11 @@ function Header({ language, onLanguageChange }: HeaderProps) {
           aria-label={translate(language, 'navigationLabel')}
         >
           {navigation.map(({ label, href }) => (
-            <a className="site-nav__link" href={href} key={label}>
+            <a
+              className="site-nav__link"
+              href={sectionHref(href.slice(1))}
+              key={label}
+            >
               {translate(language, label)}
             </a>
           ))}
@@ -47,7 +59,10 @@ function Header({ language, onLanguageChange }: HeaderProps) {
             language={language}
             onLanguageChange={onLanguageChange}
           />
-          <a className="button button--primary site-header__action" href="#get-started">
+          <a
+            className="button button--primary site-header__action"
+            href={isHome ? '#get-started' : '/become-a-farmer#registration'}
+          >
             {translate(language, 'getStarted')}
           </a>
         </div>

@@ -42,6 +42,14 @@ describe('health routes', () => {
     assert.equal(response.headers['access-control-allow-origin'], undefined)
   })
 
+  it('allows credentials only for configured browser origins', async () => {
+    const response = await request(app)
+      .get('/health')
+      .set('Origin', 'http://localhost:5173')
+    assert.equal(response.headers['access-control-allow-origin'], 'http://localhost:5173')
+    assert.equal(response.headers['access-control-allow-credentials'], 'true')
+  })
+
   it('returns a safe client error for malformed JSON', async () => {
     const response = await request(app)
       .post('/api/v1/health')
@@ -50,5 +58,34 @@ describe('health routes', () => {
     assert.equal(response.status, 400)
     assert.equal(response.body.error.code, 'INVALID_JSON')
     assert.equal(response.body.error.message, 'Request body must contain valid JSON')
+  })
+
+  it('rejects invalid Indian mobile numbers before contacting an SMS provider', async () => {
+    const response = await request(app)
+      .post('/api/v1/auth/otp/request')
+      .send({ phone: '1234567890' })
+    assert.equal(response.status, 400)
+    assert.equal(response.body.error.code, 'INVALID_PHONE')
+  })
+
+  it('reports the missing SMS provider without simulating OTP delivery', async () => {
+    const response = await request(app)
+      .post('/api/v1/auth/otp/request')
+      .send({ phone: '9876543210' })
+    assert.equal(response.status, 503)
+    assert.equal(response.body.error.code, 'OTP_PROVIDER_UNAVAILABLE')
+  })
+
+  it('requires an authenticated applicant session for private application status', async () => {
+    const response = await request(app).get('/api/v1/farmer-applications/me')
+    assert.equal(response.status, 401)
+    assert.equal(response.body.error.code, 'SESSION_REQUIRED')
+    assert.equal(response.headers['cache-control'], 'no-store')
+  })
+
+  it('requires an authenticated session before serving the admin application queue', async () => {
+    const response = await request(app).get('/api/v1/admin/farmer-applications')
+    assert.equal(response.status, 401)
+    assert.equal(response.body.error.code, 'SESSION_REQUIRED')
   })
 })

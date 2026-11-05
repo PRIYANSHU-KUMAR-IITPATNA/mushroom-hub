@@ -4,13 +4,17 @@ import { translate } from '../../i18n/translations'
 
 type FooterProps = {
   language: Language
+  isHome?: boolean
 }
 
-function Footer({ language }: FooterProps) {
+function Footer({ language, isHome = true }: FooterProps) {
+  const sectionHref = (section: string) =>
+    isHome ? `#${section}` : `/#${section}`
+
   return (
     <footer className="site-footer" id="footer">
       <Container className="site-footer__inner">
-        <a className="brand site-footer__brand" href="#top">
+        <a className="brand site-footer__brand" href={isHome ? '#top' : '/'}>
           <span className="brand__mark" aria-hidden="true">M</span>
           <span className="brand__text">
             <span className="brand__name">{translate(language, 'brandName')}</span>
@@ -23,20 +27,20 @@ function Footer({ language }: FooterProps) {
           className="site-footer__nav"
           aria-label={translate(language, 'footerNavigationLabel')}
         >
-          <a className="site-footer__link" href="#how-it-works">
+          <a className="site-footer__link" href={sectionHref('how-it-works')}>
             {translate(language, 'navHowItWorks')}
           </a>
-          <a className="site-footer__link" href="#farmers">
+          <a className="site-footer__link" href={sectionHref('farmers')}>
             {translate(language, 'navFarmers')}
           </a>
-          <a className="site-footer__link" href="#buyers">
+          <a className="site-footer__link" href={sectionHref('buyers')}>
             {translate(language, 'navBuyers')}
           </a>
-          <a className="site-footer__link" href="#about">
+          <a className="site-footer__link" href={sectionHref('about')}>
             {translate(language, 'navAbout')}
           </a>
         </nav>
-        <a className="site-footer__link site-footer__top" href="#top">
+        <a className="site-footer__link site-footer__top" href={isHome ? '#top' : '/'}>
           {translate(language, 'backToTop')}
         </a>
       </Container>

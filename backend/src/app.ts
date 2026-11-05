@@ -4,12 +4,14 @@ import express, { type RequestHandler } from 'express'
 import helmet from 'helmet'
 import type { Logger } from 'pino'
 import { errorHandler, notFoundHandler } from './middleware/errors.js'
-import { apiRouter } from './routes/index.js'
+import { createApiRouter } from './routes/index.js'
+import type { SmsProvider } from './modules/farmer-applications/sms-provider.js'
 import { logger as defaultLogger } from './utils/logger.js'
 
 export type AppOptions = {
   corsOrigins: string[]
   logger?: Logger
+  smsProvider?: SmsProvider
 }
 
 function requestLogger(log: Logger): RequestHandler {
@@ -51,8 +53,15 @@ export function createApp(options: AppOptions) {
         callback(null, false)
       },
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-Id'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'Idempotency-Key',
+        'X-CSRF-Token',
+        'X-Request-Id',
+      ],
       maxAge: 600,
+      credentials: true,
     }),
   )
   app.use(express.json({ limit: '1mb' }))
@@ -64,7 +73,11 @@ export function createApp(options: AppOptions) {
       meta: { requestId: response.locals.requestId },
     })
   })
-  app.use('/api/v1', apiRouter)
+  app.use('/api/v1', (_request, response, next) => {
+    response.setHeader('Cache-Control', 'no-store')
+    next()
+  })
+  app.use('/api/v1', createApiRouter(options.smsProvider))
   app.use(notFoundHandler)
   app.use(errorHandler)
 

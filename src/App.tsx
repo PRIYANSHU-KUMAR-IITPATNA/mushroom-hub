@@ -10,6 +10,8 @@ import { translate } from './i18n/translations'
 import FarmerPortal from './farmer/FarmerPortal'
 import BuyerPortal from './buyer/BuyerPortal'
 import AdminPortal from './admin/AdminPortal'
+import FarmerApplicationReview from './admin/FarmerApplicationReview'
+import BecomeFarmerPage from './farmer/BecomeFarmerPage'
 
 const LANGUAGE_STORAGE_KEY = 'mushroom-hub-language'
 
@@ -73,7 +75,10 @@ function App() {
     if (
       pathname === '/farmer' ||
       pathname.startsWith('/buyer') ||
-      pathname.startsWith('/admin')
+      pathname.startsWith('/admin') ||
+      pathname === '/become-a-farmer' ||
+      pathname === '/farmer-application' ||
+      pathname === '/privacy'
     ) return
     document.documentElement.lang = language
     document.title = translate(language, 'pageTitle')
@@ -96,8 +101,30 @@ function App() {
   if (pathname === '/buyer' || pathname.startsWith('/buyer/')) {
     return <BuyerPortal language={language} onLanguageChange={setLanguage} />
   }
+  if (pathname === '/admin/farmer-applications') {
+    return (
+      <FarmerApplicationReview
+        language={language}
+        onLanguageChange={setLanguage}
+      />
+    )
+  }
   if (pathname === '/admin' || pathname.startsWith('/admin/')) {
     return <AdminPortal language={language} onLanguageChange={setLanguage} />
+  }
+  if (
+    pathname === '/become-a-farmer' ||
+    pathname === '/farmer-application' ||
+    pathname === '/privacy'
+  ) {
+    return (
+      <BecomeFarmerPage
+        language={language}
+        onLanguageChange={setLanguage}
+        statusOnly={pathname === '/farmer-application'}
+        privacyOnly={pathname === '/privacy'}
+      />
+    )
   }
 
   return (
@@ -125,7 +152,7 @@ function App() {
                 {translate(language, 'heroLocation')}
               </p>
               <div className="hero-actions">
-                <Button href="/farmer">
+                <Button href="/become-a-farmer">
                   {translate(language, 'becomeFarmer')}
                 </Button>
                 <Button href="/buyer" variant="secondary">
@@ -203,7 +230,7 @@ function App() {
                 description={translate(language, 'farmerDescription')}
                 titleId="farmers-title"
               />
-              <Button href="/farmer">
+              <Button href="/become-a-farmer">
                 {translate(language, 'becomeFarmer')}
               </Button>
             </div>
@@ -306,7 +333,7 @@ function App() {
               {translate(language, 'finalDescription')}
             </p>
             <div className="final-cta__actions">
-              <Button href="/farmer" variant="secondary">
+              <Button href="/become-a-farmer" variant="secondary">
                 {translate(language, 'farmerPath')}
               </Button>
               <Button href="/buyer" variant="text">

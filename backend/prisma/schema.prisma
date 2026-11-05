@@ -22,6 +22,19 @@ enum VerificationStatus {
   SUSPENDED
 }
 
+enum FarmerApplicationStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+}
+
+enum FarmerExperience {
+  BEGINNER
+  SOME_EXPERIENCE
+  EXPERIENCED
+}
+
 enum TrainingSessionStatus {
   DRAFT
   OPEN
@@ -157,6 +170,9 @@ model User {
   expensesRecorded    Expense[]                    @relation("ExpenseRecorder")
   auditEvents         AuditLog[]                   @relation("AuditActor")
   idempotencyKeys     IdempotencyKey[]
+  farmerApplication   FarmerApplication?
+  authSessions        AuthSession[]
+  farmerReviewActions FarmerApplicationHistory[]   @relation("FarmerApplicationReviewer")
 
   @@map("users")
 }
@@ -230,6 +246,86 @@ model FarmerProfile {
 
   @@index([district, locality])
   @@map("farmer_profiles")
+}
+
+model FarmerApplication {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  reference          String                     @unique @db.VarChar(24)
+  userId             String                     @unique @map("user_id") @db.Uuid
+  fullName           String                     @map("full_name") @db.VarChar(120)
+  state              String                     @db.VarChar(100)
+  district           String                     @db.VarChar(100)
+  locality           String                     @db.VarChar(160)
+  pinCode            String                     @map("pin_code") @db.VarChar(6)
+  address            String?                    @db.VarChar(300)
+  preferredLanguage  String                     @default("en") @map("preferred_language") @db.VarChar(2)
+  experience         FarmerExperience?
+  cultivationSpace   String?                    @map("cultivation_space") @db.VarChar(80)
+  trainingInterest   Boolean?                   @map("training_interest")
+  consentAt          DateTime                   @map("consent_at") @db.Timestamptz(6)
+  consentVersion     String                     @map("consent_version") @db.VarChar(40)
+  promotionalConsent Boolean                    @default(false) @map("promotional_consent")
+  status             FarmerApplicationStatus    @default(PENDING_REVIEW)
+  applicantMessage   String?                    @map("applicant_message") @db.VarChar(1000)
+  submittedAt        DateTime                   @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  createdAt          DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user               User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  history            FarmerApplicationHistory[]
+
+  @@index([status, submittedAt])
+  @@index([district, locality])
+  @@map("farmer_applications")
+}
+
+model FarmerApplicationHistory {
+  id               String                   @id @default(uuid()) @db.Uuid
+  applicationId    String                   @map("application_id") @db.Uuid
+  fromStatus       FarmerApplicationStatus? @map("from_status")
+  toStatus         FarmerApplicationStatus  @map("to_status")
+  actorId          String?                  @map("actor_id") @db.Uuid
+  internalNote     String?                  @map("internal_note") @db.VarChar(1000)
+  applicantMessage String?                  @map("applicant_message") @db.VarChar(1000)
+  createdAt        DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  application      FarmerApplication        @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  actor            User?                    @relation("FarmerApplicationReviewer", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([applicationId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("farmer_application_history")
+}
+
+model OtpChallenge {
+  id                String    @id @default(uuid()) @db.Uuid
+  phoneE164         String    @map("phone_e164") @db.VarChar(16)
+  codeHash          String    @map("code_hash") @db.VarChar(128)
+  ipHash            String    @map("ip_hash") @db.VarChar(128)
+  attempts          Int       @default(0)
+  expiresAt         DateTime  @map("expires_at") @db.Timestamptz(6)
+  resendAvailableAt DateTime  @map("resend_available_at") @db.Timestamptz(6)
+  consumedAt        DateTime? @map("consumed_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([phoneE164, createdAt])
+  @@index([ipHash, createdAt])
+  @@index([expiresAt, consumedAt])
+  @@map("otp_challenges")
+}
+
+model AuthSession {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  tokenHash     String    @unique @map("token_hash") @db.VarChar(128)
+  csrfTokenHash String    @map("csrf_token_hash") @db.VarChar(128)
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastSeenAt    DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz(6)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt, revokedAt])
+  @@map("auth_sessions")
 }
 
 model BuyerProfile {
