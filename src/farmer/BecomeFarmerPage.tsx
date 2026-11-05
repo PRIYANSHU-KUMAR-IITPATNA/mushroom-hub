@@ -495,6 +495,7 @@ function BecomeFarmerPage({
                         id="farmer-email"
                         maxLength={254}
                         onChange={(event) => setEmail(event.target.value)}
+                        placeholder={translate(language, 'onboardingEmailPlaceholder')}
                         required
                         type="email"
                         value={email}
@@ -525,6 +526,7 @@ function BecomeFarmerPage({
                         minLength={6}
                         onChange={(event) => setOtp(event.target.value.replace(/\D/g, ''))}
                         pattern="[0-9]{6}"
+                        placeholder={translate(language, 'onboardingOtpPlaceholder')}
                         ref={otpRef}
                         required
                         value={otp}
