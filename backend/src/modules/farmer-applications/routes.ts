@@ -62,7 +62,7 @@ type SessionContext = {
   csrfTokenHash: string
 }
 
-const requireAdmin: RequestHandler = async (_request, response, next) => {
+export const requireAdmin: RequestHandler = async (_request, response, next) => {
   try {
     const session = response.locals.session as SessionContext | undefined
     if (!session) throw new HttpError(401, 'SESSION_REQUIRED', 'Sign in to continue')

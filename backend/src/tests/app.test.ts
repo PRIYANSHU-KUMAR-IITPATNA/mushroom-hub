@@ -103,4 +103,20 @@ describe('health routes', () => {
     assert.equal(response.status, 401)
     assert.equal(response.body.error.code, 'SESSION_REQUIRED')
   })
+
+  it('requires an authenticated admin session before configuring farmer rates', async () => {
+    const response = await request(app)
+      .post('/api/v1/admin/farmer-purchase-rate-policies')
+      .send({})
+    assert.equal(response.status, 401)
+    assert.equal(response.body.error.code, 'SESSION_REQUIRED')
+  })
+
+  it('requires an authenticated admin session before deciding a harvest', async () => {
+    const response = await request(app)
+      .post('/api/v1/admin/harvests/00000000-0000-4000-8000-000000000001/decision')
+      .send({})
+    assert.equal(response.status, 401)
+    assert.equal(response.body.error.code, 'SESSION_REQUIRED')
+  })
 })

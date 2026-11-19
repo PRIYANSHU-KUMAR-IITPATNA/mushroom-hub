@@ -30,6 +30,8 @@ npm start
 
 `npm run db:migrate:dev -- --name <migration-name>` is for a disposable/local development database only. Review migration SQL before applying it anywhere. `npm run db:migrate:deploy` applies checked-in migrations to the database selected by `DIRECT_DATABASE_URL`; it is not run automatically during startup or container build.
 
+For the dedicated local test database only, use `npm run db:migrate:test`. This command explicitly loads `backend/.env.test`, validates both URLs with the test-mode environment guard, requires the dedicated local test role/database on port 5432, and runs Prisma from a temporary copy of the schema/migrations with an empty `.env` to prevent discovery of `backend/.env` or other environment files. It passes Prisma only the validated database URLs and necessary platform variables, and suppresses subprocess output to avoid credential disclosure. The generic `db:migrate:deploy` command is not an approved substitute for the guarded local test command; it uses whichever `DIRECT_DATABASE_URL` is supplied by its environment.
+
 ## Deployment preparation
 
 The Dockerfile builds a production Node image and starts `dist/server.js` on the `PORT` provided by Cloud Run (8080 by default). Configure `DATABASE_URL`, `DIRECT_DATABASE_URL`, `PORT`, `NODE_ENV=production`, and explicit `CORS_ORIGINS` as Cloud Run runtime secrets/settings only after separate deployment approval. No cloud resources or billing are configured by this repository change.

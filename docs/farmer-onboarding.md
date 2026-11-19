@@ -29,9 +29,9 @@ OTP_HASH_SECRET
 
 Email is disabled by default. When enabled, startup validation requires the API key, sender address/name, and a 32-character OTP hash secret. Use `backend/.env` locally and Cloud Run Secret Manager for production secrets. Never configure a Brevo key in a `VITE_*` variable.
 
-The local backend environment contains a configured Brevo API key, but the email sender address/name, email enable flag, and OTP hash secret were not configured at the time of inspection. No email was sent. The Brevo sender/domain's verification, account sending limits, and transactional-email readiness have not been independently confirmed. Verify the sender in Brevo before enabling delivery.
+The local backend environment has Brevo credentials, sender settings, and email delivery enabled. Read-only Brevo account and sender API checks succeeded, but the configured sender was not present in the authorized sender list. API authentication does not establish sender authorization or successful delivery; verify the sender and transactional email status in Brevo before attempting a send. No email was sent. The local email timeout is explicitly set to 10 seconds, and a strong OTP hash secret is stored only in the ignored `backend/.env`; never copy its value into source control or chat. Configure the same secret in Cloud Run through Secret Manager.
 
-The local Neon database was not contacted and the migration was not applied. No Cloud Run or Vercel deployment was performed. Configure `VITE_API_BASE_URL` to the deployed `/api/v1` URL and set Cloud Run `CORS_ORIGINS` to exact HTTPS frontend origins before production use.
+The current local database URL assignments are invalid/placeholders, so no isolated Neon test database could be confirmed. The database was not contacted and no migration was applied. Configure valid pooled and direct URLs for the same dedicated non-production Neon database, then verify the target before requesting migration approval. No Cloud Run or Vercel deployment was performed. Configure `VITE_API_BASE_URL` to the deployed `/api/v1` URL and set Cloud Run `CORS_ORIGINS` to exact HTTPS frontend origins before production use.
 
 ## Verification
 

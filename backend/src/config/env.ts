@@ -131,6 +131,39 @@ const environmentSchema = z.object({
     ? new URL(environment.DIRECT_DATABASE_URL)
     : undefined
 
+  const testDatabaseName = 'mushroom_hub_test'
+  const rejectRemoteOrNeonHost = (field: 'DATABASE_URL' | 'DIRECT_DATABASE_URL', url: URL | undefined) => {
+    if (!url) return
+    const hostname = url.hostname.toLowerCase()
+    if (!isLoopback(hostname)) {
+      context.addIssue({
+        code: 'custom',
+        path: [field],
+        message: `${field} must use a loopback hostname during local test runs`,
+      })
+    }
+    if (hostname.includes('neon.') || hostname.includes('neontech') || hostname.includes('pooler')) {
+      context.addIssue({
+        code: 'custom',
+        path: [field],
+        message: `${field} must not point to a Neon hostname`,
+      })
+    }
+    const dbName = decodeURIComponent(url.pathname.replace(/^\/+/, ''))
+    if (environment.NODE_ENV === 'test' && dbName !== testDatabaseName) {
+      context.addIssue({
+        code: 'custom',
+        path: [field],
+        message: `${field} must target the dedicated local test database mushroom_hub_test`,
+      })
+    }
+  }
+
+  if (environment.NODE_ENV === 'test') {
+    rejectRemoteOrNeonHost('DATABASE_URL', runtimeUrl)
+    rejectRemoteOrNeonHost('DIRECT_DATABASE_URL', directUrl)
+  }
+
   if (
     runtimeUrl &&
     !isLoopback(runtimeUrl.hostname) &&

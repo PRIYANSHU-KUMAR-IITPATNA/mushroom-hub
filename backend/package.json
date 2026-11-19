@@ -13,6 +13,7 @@
     "test": "npm run build && node --test",
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
+    "db:migrate:test": "tsx src/scripts/local-test-migrate.ts",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev"
   },

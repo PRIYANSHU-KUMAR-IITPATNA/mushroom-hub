@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { healthRouter } from '../modules/health/routes.js'
+import { createAdminHarvestRouter } from '../modules/harvests/routes.js'
 import { createAuthRouter } from '../modules/farmer-applications/auth.js'
 import {
   createAdminFarmerApplicationsRouter,
@@ -15,6 +16,7 @@ export function createApiRouter(smsProvider?: SmsProvider, emailProvider?: Email
   apiRouter.use('/auth', createAuthRouter(smsProvider, emailProvider))
   apiRouter.use('/farmer-applications', createFarmerApplicationsRouter())
   apiRouter.use('/admin/farmer-applications', createAdminFarmerApplicationsRouter())
+  apiRouter.use('/admin', createAdminHarvestRouter())
 
   return apiRouter
 }

@@ -87,6 +87,11 @@ enum HarvestDecisionStatus {
   REJECTED
 }
 
+enum FarmerPurchaseRatePolicyStatus {
+  DRAFT
+  APPROVED
+}
+
 enum ProductKind {
   MUSHROOM
   MUSHROOM_BAG
@@ -142,40 +147,42 @@ enum PaymentAllocationType {
 }
 
 model User {
-  id                  String                       @id @default(uuid()) @db.Uuid
-  phoneE164           String?                      @unique @map("phone_e164") @db.VarChar(16)
-  phoneVerifiedAt     DateTime?                    @map("phone_verified_at") @db.Timestamptz(6)
-  email               String?                      @unique @db.VarChar(254)
-  emailVerifiedAt     DateTime?                    @map("email_verified_at") @db.Timestamptz(6)
-  status              AccountStatus                @default(ACTIVE)
-  createdAt           DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
-  farmerProfile       FarmerProfile?
-  buyerProfile        BuyerProfile?
-  roleGrants          UserRole[]                   @relation("RoleTarget")
-  rolesGranted        UserRole[]                   @relation("RoleGrantedBy")
-  rolesRevoked        UserRole[]                   @relation("RoleRevokedBy")
-  verificationsMade   FarmerVerification[]         @relation("VerificationReviewer")
-  trainingSessions    TrainingSession[]            @relation("TrainingCreator")
-  attendanceRecorded  TrainingAttendance[]         @relation("AttendanceRecorder")
-  bagBatchesCreated   MushroomBagBatch[]           @relation("BagBatchCreator")
-  bagDistributions    BagDistribution[]            @relation("DistributionCreator")
-  productionRecords   ProductionRecord[]           @relation("ProductionReporter")
-  harvestsReceived    HarvestSubmission[]          @relation("HarvestReceiver")
-  weighingsRecorded   WeighingRecord[]             @relation("WeighingOperator")
-  decisionsMade       HarvestDecision[]            @relation("HarvestDecisionMaker")
-  inventoryMovements  InventoryMovement[]          @relation("InventoryMovementActor")
-  dispatchesRecorded  DispatchRecord[]             @relation("DispatchRecorder")
-  farmerLedgerEntries FarmerPayableLedgerEntry[]   @relation("FarmerLedgerRecorder")
-  buyerLedgerEntries  BuyerReceivableLedgerEntry[] @relation("BuyerLedgerRecorder")
-  paymentsRecorded    Payment[]                    @relation("PaymentRecorder")
-  expensesRecorded    Expense[]                    @relation("ExpenseRecorder")
-  auditEvents         AuditLog[]                   @relation("AuditActor")
-  idempotencyKeys     IdempotencyKey[]
-  farmerApplication   FarmerApplication?
-  authSessions        AuthSession[]
-  emailOtpChallenges  EmailOtpChallenge[]
-  farmerReviewActions FarmerApplicationHistory[]   @relation("FarmerApplicationReviewer")
+  id                         String                       @id @default(uuid()) @db.Uuid
+  phoneE164                  String?                      @unique @map("phone_e164") @db.VarChar(16)
+  phoneVerifiedAt            DateTime?                    @map("phone_verified_at") @db.Timestamptz(6)
+  email                      String?                      @unique @db.VarChar(254)
+  emailVerifiedAt            DateTime?                    @map("email_verified_at") @db.Timestamptz(6)
+  status                     AccountStatus                @default(ACTIVE)
+  createdAt                  DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  farmerProfile              FarmerProfile?
+  buyerProfile               BuyerProfile?
+  roleGrants                 UserRole[]                   @relation("RoleTarget")
+  rolesGranted               UserRole[]                   @relation("RoleGrantedBy")
+  rolesRevoked               UserRole[]                   @relation("RoleRevokedBy")
+  verificationsMade          FarmerVerification[]         @relation("VerificationReviewer")
+  trainingSessions           TrainingSession[]            @relation("TrainingCreator")
+  attendanceRecorded         TrainingAttendance[]         @relation("AttendanceRecorder")
+  bagBatchesCreated          MushroomBagBatch[]           @relation("BagBatchCreator")
+  bagDistributions           BagDistribution[]            @relation("DistributionCreator")
+  productionRecords          ProductionRecord[]           @relation("ProductionReporter")
+  harvestsReceived           HarvestSubmission[]          @relation("HarvestReceiver")
+  weighingsRecorded          WeighingRecord[]             @relation("WeighingOperator")
+  decisionsMade              HarvestDecision[]            @relation("HarvestDecisionMaker")
+  inventoryMovements         InventoryMovement[]          @relation("InventoryMovementActor")
+  dispatchesRecorded         DispatchRecord[]             @relation("DispatchRecorder")
+  farmerLedgerEntries        FarmerPayableLedgerEntry[]   @relation("FarmerLedgerRecorder")
+  buyerLedgerEntries         BuyerReceivableLedgerEntry[] @relation("BuyerLedgerRecorder")
+  paymentsRecorded           Payment[]                    @relation("PaymentRecorder")
+  expensesRecorded           Expense[]                    @relation("ExpenseRecorder")
+  auditEvents                AuditLog[]                   @relation("AuditActor")
+  idempotencyKeys            IdempotencyKey[]
+  farmerApplication          FarmerApplication?
+  authSessions               AuthSession[]
+  emailOtpChallenges         EmailOtpChallenge[]
+  farmerReviewActions        FarmerApplicationHistory[]   @relation("FarmerApplicationReviewer")
+  farmerRatePoliciesCreated  FarmerPurchaseRatePolicy[]   @relation("FarmerRatePolicyCreator")
+  farmerRatePoliciesApproved FarmerPurchaseRatePolicy[]   @relation("FarmerRatePolicyApprover")
 
   @@map("users")
 }
@@ -551,17 +558,18 @@ model WeighingRecord {
 }
 
 model HarvestGradeResult {
-  id                String            @id @default(uuid()) @db.Uuid
-  harvestId         String            @map("harvest_id") @db.Uuid
+  id                String                    @id @default(uuid()) @db.Uuid
+  harvestId         String                    @map("harvest_id") @db.Uuid
   grade             QualityGrade
-  inspectedWeightKg Decimal           @map("inspected_weight_kg") @db.Decimal(14, 3)
-  acceptedWeightKg  Decimal           @default(0) @map("accepted_weight_kg") @db.Decimal(14, 3)
-  rejectedWeightKg  Decimal           @default(0) @map("rejected_weight_kg") @db.Decimal(14, 3)
-  ratePerKg         Decimal?          @map("rate_per_kg") @db.Decimal(14, 2)
-  criteriaVersion   String?           @map("criteria_version") @db.VarChar(40)
-  inspectedAt       DateTime          @default(now()) @map("inspected_at") @db.Timestamptz(6)
-  harvest           HarvestSubmission @relation(fields: [harvestId], references: [id], onDelete: Restrict)
+  inspectedWeightKg Decimal                   @map("inspected_weight_kg") @db.Decimal(14, 3)
+  acceptedWeightKg  Decimal                   @default(0) @map("accepted_weight_kg") @db.Decimal(14, 3)
+  rejectedWeightKg  Decimal                   @default(0) @map("rejected_weight_kg") @db.Decimal(14, 3)
+  ratePerKg         Decimal?                  @map("rate_per_kg") @db.Decimal(14, 2)
+  criteriaVersion   String?                   @map("criteria_version") @db.VarChar(40)
+  inspectedAt       DateTime                  @default(now()) @map("inspected_at") @db.Timestamptz(6)
+  harvest           HarvestSubmission         @relation(fields: [harvestId], references: [id], onDelete: Restrict)
   inventoryBatch    InventoryBatch?
+  payableEntry      FarmerPayableLedgerEntry?
 
   @@unique([harvestId, grade])
   @@index([grade, inspectedAt])
@@ -590,13 +598,37 @@ model Product {
   kind             ProductKind
   unitCode         String           @map("unit_code") @db.VarChar(20)
   active           Boolean          @default(true)
+  qualityGrade     QualityGrade?    @map("quality_grade")
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
   inventoryBatches InventoryBatch[]
   orderItems       BuyerOrderItem[]
 
+  @@unique([kind, qualityGrade])
   @@index([kind, active])
   @@map("products")
+}
+
+model FarmerPurchaseRatePolicy {
+  id             String                         @id @default(uuid()) @db.Uuid
+  reference      String                         @unique @db.VarChar(80)
+  grade          QualityGrade
+  ratePerKg      Decimal                        @map("rate_per_kg") @db.Decimal(14, 2)
+  currency       String                         @default("INR") @db.Char(3)
+  effectiveFrom  DateTime                       @map("effective_from") @db.Timestamptz(6)
+  effectiveTo    DateTime?                      @map("effective_to") @db.Timestamptz(6)
+  status         FarmerPurchaseRatePolicyStatus @default(DRAFT)
+  approvedAt     DateTime?                      @map("approved_at") @db.Timestamptz(6)
+  approvedById   String?                        @map("approved_by_id") @db.Uuid
+  createdById    String                         @map("created_by_id") @db.Uuid
+  createdAt      DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
+  approvedBy     User?                          @relation("FarmerRatePolicyApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  createdBy      User                           @relation("FarmerRatePolicyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  payableEntries FarmerPayableLedgerEntry[]
+
+  @@unique([grade, effectiveFrom])
+  @@index([grade, status, effectiveFrom, effectiveTo])
+  @@map("farmer_purchase_rate_policies")
 }
 
 model InventoryBatch {
@@ -713,23 +745,32 @@ model DispatchItem {
 }
 
 model FarmerPayableLedgerEntry {
-  id                 String                     @id @default(uuid()) @db.Uuid
-  farmerId           String                     @map("farmer_id") @db.Uuid
-  harvestDecisionId  String?                    @map("harvest_decision_id") @db.Uuid
-  type               LedgerEntryType
-  amount             Decimal                    @db.Decimal(14, 2)
-  currency           String                     @default("INR") @db.Char(3)
-  sourceReference    String                     @map("source_reference") @db.VarChar(120)
-  reversalOfId       String?                    @map("reversal_of_id") @db.Uuid
-  note               String?
-  recordedById       String?                    @map("recorded_by_id") @db.Uuid
-  createdAt          DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
-  farmer             FarmerProfile              @relation(fields: [farmerId], references: [id], onDelete: Restrict)
-  harvestDecision    HarvestDecision?           @relation(fields: [harvestDecisionId], references: [id], onDelete: Restrict)
-  reversalOf         FarmerPayableLedgerEntry?  @relation("FarmerLedgerReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
-  reversals          FarmerPayableLedgerEntry[] @relation("FarmerLedgerReversal")
-  recordedBy         User?                      @relation("FarmerLedgerRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
-  paymentAllocations PaymentAllocation[]
+  id                     String                     @id @default(uuid()) @db.Uuid
+  farmerId               String                     @map("farmer_id") @db.Uuid
+  harvestDecisionId      String?                    @map("harvest_decision_id") @db.Uuid
+  harvestGradeResultId   String?                    @unique @map("harvest_grade_result_id") @db.Uuid
+  pricingPolicyId        String?                    @map("pricing_policy_id") @db.Uuid
+  qualityGrade           QualityGrade?              @map("quality_grade")
+  acceptedQuantity       Decimal?                   @map("accepted_quantity") @db.Decimal(14, 3)
+  unitCode               String?                    @map("unit_code") @db.VarChar(20)
+  ratePerKg              Decimal?                   @map("rate_per_kg") @db.Decimal(14, 2)
+  pricingPolicyReference String?                    @map("pricing_policy_reference") @db.VarChar(80)
+  type                   LedgerEntryType
+  amount                 Decimal                    @db.Decimal(14, 2)
+  currency               String                     @default("INR") @db.Char(3)
+  sourceReference        String                     @map("source_reference") @db.VarChar(120)
+  reversalOfId           String?                    @map("reversal_of_id") @db.Uuid
+  note                   String?
+  recordedById           String?                    @map("recorded_by_id") @db.Uuid
+  createdAt              DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  farmer                 FarmerProfile              @relation(fields: [farmerId], references: [id], onDelete: Restrict)
+  harvestDecision        HarvestDecision?           @relation(fields: [harvestDecisionId], references: [id], onDelete: Restrict)
+  harvestGradeResult     HarvestGradeResult?        @relation(fields: [harvestGradeResultId], references: [id], onDelete: Restrict)
+  pricingPolicy          FarmerPurchaseRatePolicy?  @relation(fields: [pricingPolicyId], references: [id], onDelete: Restrict)
+  reversalOf             FarmerPayableLedgerEntry?  @relation("FarmerLedgerReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversals              FarmerPayableLedgerEntry[] @relation("FarmerLedgerReversal")
+  recordedBy             User?                      @relation("FarmerLedgerRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  paymentAllocations     PaymentAllocation[]
 
   @@unique([farmerId, sourceReference])
   @@index([farmerId, createdAt])

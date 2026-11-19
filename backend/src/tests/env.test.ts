@@ -33,6 +33,96 @@ describe('environment configuration', () => {
     ])
   })
 
+  it('requires a loopback disposable database for test runs', () => {
+    const localTestEnvironment = {
+      DATABASE_URL: 'postgresql://mushroom:secret@localhost:5432/mushroom_hub_test',
+      DIRECT_DATABASE_URL: 'postgresql://mushroom:secret@localhost:5432/mushroom_hub_test',
+      NODE_ENV: 'test',
+    }
+    assert.doesNotThrow(() => parseEnvironment(localTestEnvironment))
+
+    assert.throws(
+      () => parseEnvironment({
+        ...localTestEnvironment,
+        DATABASE_URL: 'postgresql://mushroom:secret@db.example.com:5432/mushroom_hub_test',
+      }),
+      EnvironmentValidationError,
+    )
+
+    assert.throws(
+      () => parseEnvironment({
+        ...localTestEnvironment,
+        DATABASE_URL: 'postgresql://mushroom:secret@localhost:5432/other_database',
+      }),
+      EnvironmentValidationError,
+    )
+  })
+
+  it('validates the direct URL independently and rejects remote host aliases', () => {
+    const localTestEnvironment = {
+      DATABASE_URL: 'postgresql://mushroom:secret@localhost:5432/mushroom_hub_test',
+      DIRECT_DATABASE_URL: 'postgresql://mushroom:secret@127.0.0.1:5432/mushroom_hub_test',
+      NODE_ENV: 'test',
+    }
+
+    for (const [field, value] of [
+      ['DATABASE_URL', 'postgresql://mushroom:secret@ep-example-pooler.neon.tech:5432/mushroom_hub_test'],
+      ['DIRECT_DATABASE_URL', 'postgresql://mushroom:secret@ep-example.neon.tech:5432/mushroom_hub_test'],
+      ['DATABASE_URL', 'postgresql://mushroom:secret@localhost.example.com:5432/mushroom_hub_test'],
+      ['DIRECT_DATABASE_URL', 'postgresql://mushroom:secret@127.0.0.1.nip.io:5432/mushroom_hub_test'],
+    ] as const) {
+      assert.throws(
+        () => parseEnvironment({ ...localTestEnvironment, [field]: value }),
+        EnvironmentValidationError,
+        `${field} must reject unsafe host ${new URL(value).hostname}`,
+      )
+    }
+  })
+
+  it('requires the dedicated database name in both test URLs', () => {
+    const localTestEnvironment = {
+      DATABASE_URL: 'postgresql://mushroom:secret@localhost:5432/mushroom_hub_test',
+      DIRECT_DATABASE_URL: 'postgresql://mushroom:secret@localhost:5432/mushroom_hub_test',
+      NODE_ENV: 'test',
+    }
+
+    for (const field of ['DATABASE_URL', 'DIRECT_DATABASE_URL'] as const) {
+      assert.throws(
+        () => parseEnvironment({
+          ...localTestEnvironment,
+          [field]: 'postgresql://mushroom:secret@localhost:5432/production',
+        }),
+        EnvironmentValidationError,
+      )
+    }
+  })
+
+  it('rejects missing or malformed test URLs before any database connection', () => {
+    const localTestEnvironment = {
+      DATABASE_URL: 'postgresql://mushroom:secret@localhost:5432/mushroom_hub_test',
+      DIRECT_DATABASE_URL: 'postgresql://mushroom:secret@localhost:5432/mushroom_hub_test',
+      NODE_ENV: 'test',
+    }
+
+    for (const field of ['DATABASE_URL', 'DIRECT_DATABASE_URL'] as const) {
+      const missing = { ...localTestEnvironment }
+      delete missing[field]
+      assert.throws(() => parseEnvironment(missing), EnvironmentValidationError)
+      assert.throws(
+        () => parseEnvironment({ ...localTestEnvironment, [field]: 'not-a-url' }),
+        EnvironmentValidationError,
+      )
+    }
+  })
+
+  it('preserves production Neon URL validation', () => {
+    assert.doesNotThrow(() => parseEnvironment({
+      ...validEnvironment,
+      NODE_ENV: 'production',
+      CORS_ORIGINS: 'https://mushroom.example',
+    }))
+  })
+
   it('rejects missing database settings without printing their values', () => {
     assert.throws(
       () => parseEnvironment({}),

@@ -32,15 +32,18 @@ The API uses a small modular-monolith shape. Routes validate input and keep doma
 
 The admin portal's existing PIN-gated screens remain browser-local demos. The separate `/admin/farmer-applications` screen calls only the role-protected backend endpoints and is not authorized by the demo PIN.
 
+The admin harvest route accepts a graded harvest using the actor from the authenticated session. It requires a unique idempotency key and performs the decision, accepted-grade inventory receipt, farmer payable snapshot, idempotency result, and success audit in one serializable Prisma transaction. A missing or ambiguous effective approved farmer purchase-rate policy or missing grade-specific kilogram product aborts the transaction. This does not change farmer registration behavior. Payouts, payment allocations, farmer/admin payable dashboards, and statements remain unimplemented.
+
 ## Data and transaction boundaries
 
 - Neon PostgreSQL is the source of truth for future shared operations.
 - `DATABASE_URL` is the Neon pooled runtime connection. `DIRECT_DATABASE_URL` is the direct connection Prisma uses for migrations.
-- Amounts and physical quantities use PostgreSQL `numeric` via Prisma `Decimal`; calculate and round monetary totals on the trusted server.
+- Amounts and physical quantities use PostgreSQL `numeric` via Prisma `Decimal`; calculate and round monetary totals on the trusted server. The additive harvest migration makes approved farmer rate policies and farmer payable ledger rows immutable at the database level; corrections must be recorded as linked entries.
 - Farmer payables and buyer receivables are separate ledgers. Corrections use linked reversal entries; do not edit/delete posted financial or inventory history.
 - Physical harvest intake is represented at a named collection centre with receipt and weighing records. An accepted grade can be traced to a sellable inventory batch; rejected quantities must not create one.
 - Farmer application creation, status history, review decisions, farmer profile creation, role grant, and idempotency record are transactionally linked. OTP plaintext is never persisted; session cookies contain random opaque tokens whose hashes are stored in the database.
-- The additive farmer-onboarding migration is committed but has not been applied to any database.
+- Accepted harvest quantities create inventory receipt movements and farmer payable ledger entries using the effective approved grade-rate policy. Amounts use decimal arithmetic with HALF_UP rounding to INR minor units, and each payable snapshots the policy reference, grade, quantity, and rate. Rejected quantities create neither payable nor sellable inventory.
+- The additive farmer-onboarding and harvest-acceptance/payable migrations are committed; no migration is applied automatically at API startup, and applying them requires operator review and approval.
 - Grade labels A/B/C/D are modeled; grade criteria, rates, prices, fees, terms, and credit limits are not seeded or inferred.
 
 ## API conventions and controls

@@ -1,6 +1,6 @@
 # Mushroom Hub database schema overview
 
-The schema in `backend/prisma/schema.prisma` is a normalized initial Prisma 6.12 model for Neon PostgreSQL. It is design/build foundation only: no Neon connection was made and no migration was applied. A production rollout requires reviewed migration SQL, environment-specific credentials, a backup/recovery plan, and approval.
+The schema in `backend/prisma/schema.prisma` is a normalized Prisma 6.12 model for Neon PostgreSQL. The Neon test connection was verified in a prior read-only check; no database connection or migration was performed as part of the current implementation. A production rollout requires reviewed migration SQL, environment-specific credentials, a backup/recovery plan, and approval.
 
 ## Models and relationships
 
@@ -26,6 +26,16 @@ The schema in `backend/prisma/schema.prisma` is a normalized initial Prisma 6.12
 - No grade criteria, price/rate, fee, payment term, credit limit, seeded inventory, or initial user is defined.
 - Do not delete posted payment, allocation, ledger, dispatch, audit, or inventory history; record corrections as linked reversals.
 - Database-level cross-row rules such as accepted-weight sums, stock availability, payment allocations, and idempotency replay require trusted transaction logic. Prisma's schema alone cannot express every business invariant.
+
+## Farmer payable recognition on harvest acceptance
+
+The approved recognition event is Hub acceptance of graded harvested mushrooms. The admin decision operation must atomically update the harvest and grade quantities, create sellable batches and receipt movements for accepted kilograms only, create one farmer payable per accepted grade, store the approved rate/policy snapshot, record idempotency, and append an audit event. Rejected quantities create neither inventory nor payable.
+
+Farmer purchase-rate policies are grade-specific, effective-dated, INR-per-kilogram records. An authorized admin creates an approved policy with a unique reference, approval actor/time, effective range, and reason. Effective ranges use an inclusive start and exclusive end; overlapping ranges for the same grade are rejected. The acceptance timestamp selects the policy; a missing or ambiguous policy fails the entire decision. Amounts are calculated with decimal arithmetic and rounded HALF_UP to INR minor units. Policy rate/reference and accepted quantity are snapshotted on the payable; approved policy rows and farmer payable ledger entries are protected from update/delete by the additive migration. Corrections must be new linked ledger entries.
+
+Products must be configured as active `MUSHROOM` products with a matching quality grade and kilogram unit before accepted stock of that grade can be recorded. This workflow does not define or seed any rate or product.
+
+Farmer payout and allocation workflows, farmer/admin balance views, and statements are not part of this implementation. A payable is a liability, not a payment; only a separate confirmed payout and allocation will settle it.
 
 ## Migrations
 
