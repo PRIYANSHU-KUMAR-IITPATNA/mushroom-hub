@@ -5,6 +5,8 @@ import { z } from 'zod'
 import { getPrismaClient } from '../../config/database.js'
 import { HttpError } from '../../middleware/errors.js'
 import { validateBody } from '../../middleware/request-validation.js'
+import { logger } from '../../utils/logger.js'
+import type { GoogleSheetsSink } from './google-sheets-sink.js'
 import { normalizeIndianPhone, requireApplicantSession, requireCsrfToken } from './auth.js'
 
 const CONSENT_VERSION = 'farmer-application-v1'
@@ -168,7 +170,7 @@ function maskPhone(phone: string | null): string {
   return `${phone.slice(0, 3)}******${phone.slice(-2)}`
 }
 
-export function createFarmerApplicationsRouter(): Router {
+export function createFarmerApplicationsRouter(googleSheetsSink?: GoogleSheetsSink): Router {
   const router = Router()
 
   router.post(
@@ -275,6 +277,49 @@ export function createFarmerApplicationsRouter(): Router {
           updatedAt: true,
         },
       })
+      if (googleSheetsSink) {
+        const sheetRecord = await prisma.farmerApplication.findUniqueOrThrow({
+          where: { id: applicationId },
+          select: {
+            reference: true,
+            fullName: true,
+            contactPhoneE164: true,
+            locality: true,
+            block: true,
+            pinCode: true,
+            district: true,
+            state: true,
+            experience: true,
+            cultivationSpace: true,
+            trainingInterest: true,
+            submittedAt: true,
+            user: { select: { email: true } },
+          },
+        })
+        void googleSheetsSink.append({
+          reference: sheetRecord.reference,
+          name: sheetRecord.fullName,
+          email: sheetRecord.user.email ?? '',
+          phone: sheetRecord.contactPhoneE164 ?? '',
+          locality: sheetRecord.locality,
+          block: sheetRecord.block ?? '',
+          pinCode: sheetRecord.pinCode,
+          district: sheetRecord.district,
+          state: sheetRecord.state,
+          experience: sheetRecord.experience,
+          cultivationSpace: sheetRecord.cultivationSpace,
+          trainingInterest: sheetRecord.trainingInterest,
+          submittedAt: sheetRecord.submittedAt.toISOString(),
+        }).catch((error: unknown) => {
+          logger.error(
+            {
+              reference: sheetRecord.reference,
+              errorName: error instanceof Error ? error.name : 'UnknownError',
+            },
+            'Farmer application was saved but could not be copied to Google Sheets',
+          )
+        })
+      }
       response.status(201).json({
         data: publicApplication(application),
         error: null,

@@ -7,6 +7,7 @@ import { errorHandler, notFoundHandler } from './middleware/errors.js'
 import { createApiRouter } from './routes/index.js'
 import type { SmsProvider } from './modules/farmer-applications/sms-provider.js'
 import type { EmailProvider } from './modules/farmer-applications/email-provider.js'
+import type { GoogleSheetsSink } from './modules/farmer-applications/google-sheets-sink.js'
 import { logger as defaultLogger } from './utils/logger.js'
 
 export type AppOptions = {
@@ -14,6 +15,7 @@ export type AppOptions = {
   logger?: Logger
   smsProvider?: SmsProvider
   emailProvider?: EmailProvider
+  googleSheetsSink?: GoogleSheetsSink
 }
 
 function requestLogger(log: Logger): RequestHandler {
@@ -79,7 +81,7 @@ export function createApp(options: AppOptions) {
     response.setHeader('Cache-Control', 'no-store')
     next()
   })
-  app.use('/api/v1', createApiRouter(options.smsProvider, options.emailProvider))
+  app.use('/api/v1', createApiRouter(options.smsProvider, options.emailProvider, options.googleSheetsSink))
   app.use(notFoundHandler)
   app.use(errorHandler)
 

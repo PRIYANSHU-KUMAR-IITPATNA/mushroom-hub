@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: mushroom-hub-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://mushroom-hub-piyush.vercel.app,https://mushroom-hub-piyush-git-feature-brevo-tra-0cb9d6-kr2177641-7933.vercel.app
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_EMAIL_SENDER
+        sync: false
+      - key: BREVO_EMAIL_SENDER_NAME
+        value: Mushroom Hub
+      - key: BREVO_EMAIL_ENABLED
+        value: "true"
+      - key: OTP_HASH_SECRET
+        generateValue: true
+      - key: GOOGLE_SHEETS_WEB_APP_URL
+        sync: false
+      - key: GOOGLE_SHEETS_WEB_APP_TOKEN
+        sync: false

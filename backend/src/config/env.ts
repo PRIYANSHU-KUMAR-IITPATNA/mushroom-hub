@@ -59,6 +59,14 @@ const environmentSchema = z.object({
   ),
   BREVO_EMAIL_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
   BREVO_EMAIL_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(10000),
+  GOOGLE_SHEETS_WEB_APP_URL: z.preprocess(
+    (value) => typeof value === 'string' && value.trim() === '' ? undefined : value,
+    z.string().url().optional(),
+  ),
+  GOOGLE_SHEETS_WEB_APP_TOKEN: z.preprocess(
+    (value) => typeof value === 'string' && value.trim() === '' ? undefined : value,
+    z.string().min(32).optional(),
+  ),
   OTP_HASH_SECRET: z.preprocess(
     (value) => value === '' ? undefined : value,
     z.string().min(32).optional(),
@@ -119,6 +127,14 @@ const environmentSchema = z.object({
         message: 'OTP_HASH_SECRET is required when transactional email is enabled',
       })
     }
+  }
+
+  if (Boolean(environment.GOOGLE_SHEETS_WEB_APP_URL) !== Boolean(environment.GOOGLE_SHEETS_WEB_APP_TOKEN)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['GOOGLE_SHEETS_WEB_APP_TOKEN'],
+      message: 'Configure both Google Sheets web app settings together',
+    })
   }
 
   const isLoopback = (hostname: string) =>
